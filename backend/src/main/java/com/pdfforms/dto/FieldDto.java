@@ -1,0 +1,20 @@
+package com.pdfforms.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class FieldDto {
+    private String fieldName;
+    private int page;
+    private double x;
+    private double y;
+    private double width;
+    private double height;
+    private String currentValue;
+}
