@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import PDFCanvas from '../components/PDFCanvas'
 import FieldOverlay from '../components/FieldOverlay'
 import SignaturePanel from '../components/SignaturePanel'
-import { getSignerDocument, fillFields, signDocument } from '../api/workflowApi'
+import { getSignerDocument, fillAndSign } from '../api/workflowApi'
 import { AlertTriangle, Loader2, FileSignature } from 'lucide-react'
 
 export default function SignerPage() {
@@ -72,15 +72,10 @@ export default function SignerPage() {
     })
   }, [docData])
 
-  const handleFill = useCallback(async () => {
+  const handleFillAndSign = useCallback(async () => {
     if (!docData) return
-    await fillFields(docData.workflowId, docData.signerName, fieldValues)
+    await fillAndSign(docData.workflowId, docData.signerName, fieldValues)
   }, [docData, fieldValues])
-
-  const handleSign = useCallback(async () => {
-    if (!docData) return
-    await signDocument(docData.workflowId, docData.signerName)
-  }, [docData])
 
   // Chargement
   if (status === 'loading') {
@@ -191,8 +186,8 @@ export default function SignerPage() {
             fields={fields}
             values={fieldValues}
             signerName={docData?.signerName ?? signerId}
-            onFill={handleFill}
-            onSign={handleSign}
+            workflowName={docData?.workflowName}
+            onFillAndSign={handleFillAndSign}
           />
         </div>
       </div>

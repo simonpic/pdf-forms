@@ -118,6 +118,20 @@ public class WorkflowController {
     }
 
     /**
+     * POST /api/workflows/{workflowId}/fill-and-sign
+     * Remplit les champs du signataire puis signe le document en une seule opération.
+     */
+    @PostMapping("/{workflowId}/fill-and-sign")
+    public ResponseEntity<Map<String, Object>> fillAndSign(
+            @PathVariable String workflowId,
+            @RequestBody FillAndSignRequest request) throws Exception {
+
+        log.info("POST /api/workflows/{}/fill-and-sign - signer: {}", workflowId, request.getSignerName());
+        Map<String, Object> result = workflowService.fillAndSign(workflowId, request);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
      * GET /api/workflows/{workflowId}/download
      * Télécharge le PDF master final (uniquement si workflow COMPLETED).
      */

@@ -295,6 +295,25 @@ public class WorkflowService {
         log.info("Champs remplis par '{}' : {}", signerId, request.getFields().keySet());
     }
 
+    /**
+     * Remplit les champs puis signe le document en une seule opération atomique.
+     * Appelle fillFields puis signDocument séquentiellement.
+     */
+    public Map<String, Object> fillAndSign(String workflowId, FillAndSignRequest request) throws Exception {
+        // Étape 1 — remplir les champs (si la map n'est pas vide)
+        if (request.getFields() != null && !request.getFields().isEmpty()) {
+            FillRequest fillRequest = new FillRequest();
+            fillRequest.setSignerName(request.getSignerName());
+            fillRequest.setFields(request.getFields());
+            fillFields(workflowId, fillRequest);
+        }
+
+        // Étape 2 — signer
+        SignRequest signRequest = new SignRequest();
+        signRequest.setSignerName(request.getSignerName());
+        return signDocument(workflowId, signRequest);
+    }
+
     // -------------------------------------------------------------------------
     // Téléchargement du PDF final
     // -------------------------------------------------------------------------

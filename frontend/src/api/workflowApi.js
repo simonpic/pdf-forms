@@ -108,6 +108,27 @@ export async function signDocument(workflowId, signerName) {
 }
 
 /**
+ * Remplit les champs puis signe le document en une seule opération.
+ * @param {string} workflowId
+ * @param {string} signerName
+ * @param {Object} fields - { fieldName: value } (peut être vide)
+ */
+export async function fillAndSign(workflowId, signerName, fields) {
+  const res = await fetch(`${API_BASE}/workflows/${workflowId}/fill-and-sign`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ signerName, fields }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || `Erreur ${res.status}`)
+  }
+
+  return res.json()
+}
+
+/**
  * Déclenche le téléchargement du PDF final signé.
  * @param {string} workflowId
  */
