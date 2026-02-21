@@ -1,6 +1,24 @@
 const API_BASE = '/api'
 
 /**
+ * Analyse un PDF et retourne les champs AcroForm existants.
+ * @param {File} file - Le fichier PDF
+ * @returns {{ fields: Array }} Liste des champs détectés (coords en points PDF)
+ */
+export async function analyzePdf(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const res = await fetch(`${API_BASE}/workflows/analyze-pdf`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!res.ok) throw new Error(`Erreur analyse PDF : ${res.status}`)
+  return res.json()
+}
+
+/**
  * Crée un workflow à partir du PDF uploadé et des métadonnées.
  * @param {File} file - Le fichier PDF
  * @param {Object} data - { name, signers: [{name, order}], fields: [{...}] }

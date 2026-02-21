@@ -1,5 +1,7 @@
 package com.pdfforms.service;
 
+import com.pdfforms.dto.AnalyzePdfResponse;
+import com.pdfforms.dto.DetectedFieldDto;
 import com.pdfforms.dto.FieldRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -15,7 +17,9 @@ import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.SignatureOptions;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
+import org.apache.pdfbox.pdmodel.interactive.form.PDCheckBox;
 import org.apache.pdfbox.pdmodel.interactive.form.PDField;
+import org.apache.pdfbox.pdmodel.interactive.form.PDRadioButton;
 import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
 import org.bouncycastle.cert.jcajce.JcaCertStore;
 import org.bouncycastle.cms.CMSProcessableByteArray;
@@ -35,10 +39,87 @@ import java.io.InputStream;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 @Slf4j
 @Service
 public class PdfBoxService {
+
+    /**
+     * Extrait les champs AcroForm d'un PDF existant.
+     * Retourne une liste de DetectedFieldDto avec les coordonnées PDF (origine bas-gauche).
+     *
+     * @param pdfBytes bytes du PDF à analyser
+     * @return AnalyzePdfResponse contenant la liste des champs détectés
+     */
+    public AnalyzePdfResponse extractFields(byte[] pdfBytes) throws IOException {
+        try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(pdfBytes))) {
+            PDAcroForm acroForm = doc.getDocumentCatalog().getAcroForm();
+            if (acroForm == null) {
+                log.debug("PDF sans AcroForm — aucun champ à extraire.");
+                return new AnalyzePdfResponse(List.of());
+            }
+
+            // Index page → numéro (0-based)
+            Map<PDPage, Integer> pageIndex = new HashMap<>();
+            int idx = 0;
+            for (PDPage page : doc.getPages()) pageIndex.put(page, idx++);
+
+            List<DetectedFieldDto> result = new ArrayList<>();
+            Set<String> usedNames = new HashSet<>();
+            int unnamedCount = 0;
+
+            for (PDField field : acroForm.getFieldTree()) {
+                String fieldType = detectFieldType(field);
+                if (fieldType == null) continue;
+
+                String groupName = "radio".equals(fieldType) ? field.getPartialName() : null;
+                List<PDAnnotationWidget> widgets = field.getWidgets();
+                if (widgets == null || widgets.isEmpty()) continue;
+
+                for (int i = 0; i < widgets.size(); i++) {
+                    PDAnnotationWidget widget = widgets.get(i);
+                    PDRectangle rect = widget.getRectangle();
+                    if (rect == null) continue;
+
+                    int page = pageIndex.getOrDefault(widget.getPage(), 0);
+
+                    // Nom unique
+                    String baseName = field.getFullyQualifiedName();
+                    if (baseName == null || baseName.isBlank()) {
+                        baseName = fieldType + "_imported_" + (unnamedCount++);
+                    }
+                    String fieldName = widgets.size() > 1 ? baseName + "_" + i : baseName;
+                    // Dédoublonnage
+                    if (usedNames.contains(fieldName)) fieldName = fieldName + "_" + System.nanoTime();
+                    usedNames.add(fieldName);
+
+                    result.add(DetectedFieldDto.builder()
+                            .fieldName(fieldName)
+                            .fieldType(fieldType)
+                            .page(page)
+                            .x(rect.getLowerLeftX())
+                            .y(rect.getLowerLeftY())
+                            .width(rect.getWidth())
+                            .height(rect.getHeight())
+                            .groupName(groupName)
+                            .build());
+                }
+            }
+
+            log.info("PDF analysé : {} champ(s) AcroForm détecté(s).", result.size());
+            return new AnalyzePdfResponse(result);
+        }
+    }
+
+    private String detectFieldType(PDField field) {
+        if (field instanceof PDTextField)  return "text";
+        if (field instanceof PDCheckBox)   return "checkbox";
+        if (field instanceof PDRadioButton) return "radio";
+        return null; // PDComboBox, PDListBox, PDSignatureField → ignorés
+    }
 
     /**
      * Crée le PDF master avec les champs AcroForm positionnés.

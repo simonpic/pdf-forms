@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import PDFCanvas from '../components/PDFCanvas'
@@ -9,7 +9,7 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Card, CardContent } from '../components/ui/card'
 import { Tooltip } from '../components/ui/tooltip'
-import { createWorkflow } from '../api/workflowApi'
+import { createWorkflow, analyzePdf } from '../api/workflowApi'
 import { Upload, FileText, Type, SquareCheck, CircleDot, CheckCircle2, Circle } from 'lucide-react'
 
 const TOOLS = [
@@ -26,6 +26,7 @@ export default function CreateWorkflow() {
   const [pdfData, setPdfData] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [pageInfo, setPageInfo] = useState(null)
+  const [importedFieldsPdf, setImportedFieldsPdf] = useState(null)
   const [workflowName, setWorkflowName] = useState('')
   const [signers, setSigners] = useState([])
   const [fields, setFields] = useState([])
@@ -36,17 +37,29 @@ export default function CreateWorkflow() {
 
   const fileInputRef = useRef(null)
 
-  const loadPdf = useCallback((file) => {
+  const loadPdf = useCallback(async (file) => {
     if (!file || file.type !== 'application/pdf') {
       alert('Veuillez sélectionner un fichier PDF.')
       return
     }
     setPdfFile(file)
     setFields([])
+    setPageInfo(null)
+    setImportedFieldsPdf(null)
     setResult(null)
+
+    // Rendu PDF.js
     const reader = new FileReader()
     reader.onload = (e) => setPdfData(e.target.result)
     reader.readAsArrayBuffer(file)
+
+    // Analyse des champs AcroForm existants (en parallèle)
+    try {
+      const { fields: detected } = await analyzePdf(file)
+      setImportedFieldsPdf(detected)
+    } catch {
+      setImportedFieldsPdf([]) // PDF sans champs ou erreur → on ignore
+    }
   }, [])
 
   const handleFileDrop = useCallback((e) => {
@@ -68,6 +81,32 @@ export default function CreateWorkflow() {
   const handleFieldMoved = useCallback((index, updates) => {
     setFields((prev) => prev.map((f, i) => i === index ? { ...f, ...updates } : f))
   }, [])
+
+  // Conversion coords PDF → canvas une fois que scale est disponible
+  useEffect(() => {
+    if (!pageInfo || !importedFieldsPdf || importedFieldsPdf.length === 0) return
+    const { scale, pageHeightPt } = pageInfo
+    const converted = importedFieldsPdf.map((f) => ({
+      fieldType: f.fieldType,
+      fieldName: f.fieldName,
+      assignedTo: '',
+      signerName: null,
+      signerIndex: -1,
+      page: f.page,
+      x: f.x,
+      y: f.y,
+      width: f.width,
+      height: f.height,
+      ...(f.groupName ? { groupName: f.groupName } : {}),
+      canvasRect: {
+        x: f.x * scale,
+        y: (pageHeightPt - f.y - f.height) * scale,
+        width: f.width * scale,
+        height: f.height * scale,
+      },
+    }))
+    setFields(converted)
+  }, [pageInfo, importedFieldsPdf])
 
   const handleFieldRemoved = (index) => {
     setFields((prev) => prev.filter((_, i) => i !== index))
@@ -132,7 +171,7 @@ export default function CreateWorkflow() {
               <FileText size={14} className="text-indigo-500 shrink-0" />
               <span className="font-medium max-w-56 truncate">{pdfFile?.name}</span>
               <button
-                onClick={() => { setPdfFile(null); setPdfData(null); setFields([]) }}
+                onClick={() => { setPdfFile(null); setPdfData(null); setFields([]); setPageInfo(null); setImportedFieldsPdf(null) }}
                 className="text-slate-400 hover:text-red-500 ml-1 shrink-0"
                 title="Retirer le PDF"
               >
