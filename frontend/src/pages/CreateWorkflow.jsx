@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import PDFCanvas from '../components/PDFCanvas'
 import FieldDrawingLayer from '../components/FieldDrawingLayer'
-import FieldList from '../components/FieldList'
 import SignerList from '../components/SignerList'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -239,9 +238,7 @@ export default function CreateWorkflow() {
 
             <SignerList signers={signers} onChange={setSigners} />
 
-            <FieldList fields={fields} onRemove={handleFieldRemoved} />
-
-            {error && (
+{error && (
               <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
                 {error}
               </div>
