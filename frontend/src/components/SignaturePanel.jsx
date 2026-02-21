@@ -49,9 +49,7 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
   const [open, setOpen]       = useState(false)
 
   const displayItems = buildDisplayItems(fields, values)
-  const allFilled    = displayItems.every((item) => item.filled)
   const hasFields    = displayItems.length > 0
-  const canSign      = !hasFields || allFilled
 
   const handleConfirm = async () => {
     setOpen(false)
@@ -142,18 +140,12 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
           {/* Bouton principal */}
           <Button
             className="w-full bg-indigo-500 hover:bg-indigo-600"
-            disabled={!canSign || loading}
+            disabled={loading}
             onClick={() => setOpen(true)}
           >
             <PenLine size={16} />
             {loading ? 'Signature en cours…' : 'Signer le document'}
           </Button>
-
-          {hasFields && !allFilled && (
-            <p className="text-xs text-center text-slate-400">
-              Remplissez tous vos champs pour continuer.
-            </p>
-          )}
         </CardContent>
       </Card>
 
