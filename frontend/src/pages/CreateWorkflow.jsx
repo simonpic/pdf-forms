@@ -8,10 +8,10 @@ import SignerList from '../components/SignerList'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
-import { Badge } from '../components/ui/badge'
+import { Card, CardContent } from '../components/ui/card'
+import { Tooltip } from '../components/ui/tooltip'
 import { createWorkflow } from '../api/workflowApi'
-import { Upload, FileText, CheckCircle, Copy, ExternalLink, Type, SquareCheck, CircleDot } from 'lucide-react'
+import { Upload, FileText, Type, SquareCheck, CircleDot } from 'lucide-react'
 
 const TOOLS = [
   { id: 'text',     label: 'Texte',  Icon: Type,        hint: 'Cliquez-glissez sur le PDF pour dessiner un champ texte.' },
@@ -103,70 +103,6 @@ export default function CreateWorkflow() {
   }
 
   // -------------------------------------------------------------------------
-  // Rendu — page de succès (affiché brièvement avant la redirection)
-  // -------------------------------------------------------------------------
-
-  if (result) {
-    return (
-      <div className="p-8">
-        <div className="max-w-xl mx-auto space-y-4">
-          <div className="flex items-center gap-3 text-emerald-700">
-            <CheckCircle size={28} />
-            <div>
-              <h1 className="text-xl font-bold">Workflow créé !</h1>
-              <p className="text-sm text-emerald-600">ID : {result.workflowId}</p>
-            </div>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>URLs des signataires</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-slate-500">
-                Partagez ces liens avec chaque signataire dans l&apos;ordre indiqué :
-              </p>
-              {result.signers
-                .sort((a, b) => a.order - b.order)
-                .map((signer) => {
-                  const url = `${window.location.origin}/${result.workflowId}/signature/${signer.signerId}`
-                  return (
-                    <div
-                      key={signer.signerId}
-                      className="flex items-center gap-2 p-3 bg-slate-50 rounded-md border border-slate-100"
-                    >
-                      <Badge className="bg-indigo-100 text-indigo-700 shrink-0">#{signer.order}</Badge>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800">{signer.name}</p>
-                        <p className="text-xs text-indigo-600 font-mono truncate">{url}</p>
-                      </div>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(url)}
-                        className="text-slate-400 hover:text-slate-600 shrink-0"
-                        title="Copier le lien"
-                      >
-                        <Copy size={14} />
-                      </button>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-slate-400 hover:text-indigo-600 shrink-0"
-                        title="Ouvrir"
-                      >
-                        <ExternalLink size={14} />
-                      </a>
-                    </div>
-                  )
-                })}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  // -------------------------------------------------------------------------
   // Rendu — formulaire de création
   // -------------------------------------------------------------------------
 
@@ -205,19 +141,20 @@ export default function CreateWorkflow() {
         {/* Sidebar verticale — outils de champ (visible uniquement avec un PDF chargé) */}
         {pdfData && (
           <div className="w-12 bg-white border-r border-slate-200 flex flex-col items-center pt-4 pb-3 gap-1 shrink-0">
-            {TOOLS.map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                title={label}
-                onClick={() => setActiveTool(id)}
-                className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
-                  activeTool === id
-                    ? 'bg-indigo-500 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Icon size={16} />
-              </button>
+            {TOOLS.map(({ id, label, Icon, hint }) => (
+              <Tooltip key={id} content={hint} side="right">
+                <button
+                  aria-label={label}
+                  onClick={() => setActiveTool(id)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    activeTool === id
+                      ? 'bg-indigo-500 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Icon size={16} />
+                </button>
+              </Tooltip>
             ))}
           </div>
         )}
@@ -313,12 +250,6 @@ export default function CreateWorkflow() {
             >
               {submitting ? 'Création en cours…' : 'Créer le workflow'}
             </Button>
-
-            {pdfData && signers.length > 0 && (
-              <p className="text-xs text-slate-400 text-center">
-                {TOOLS.find((t) => t.id === activeTool)?.hint}
-              </p>
-            )}
           </div>
         </div>
       </div>
