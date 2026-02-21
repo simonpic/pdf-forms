@@ -126,10 +126,10 @@ export default function FieldDrawingLayer({
 
     const field = {
       fieldType: activeTool,
-      fieldName: `${activeTool}_${signer.signerId}_${Date.now()}`,
-      assignedTo: signer.signerId,
-      signerName: signer.name,
-      signerIndex: index,
+      fieldName: `${activeTool}_${signer ? signer.signerId : 'unassigned'}_${Date.now()}`,
+      assignedTo: signer ? signer.signerId : '',
+      signerName: signer ? signer.name : null,
+      signerIndex: signer ? index : -1,
       page: 0,
       x: Math.round(pdfX * 100) / 100,
       y: Math.round(pdfY * 100) / 100,
@@ -182,7 +182,11 @@ export default function FieldDrawingLayer({
     >
       {/* Champs déjà placés */}
       {fields.map((field, i) => {
-        const colorIndex = field.signerIndex ?? i % SIGNER_COLORS.length
+        const unassigned = !field.signerName
+        const colorIndex = field.signerIndex >= 0 ? field.signerIndex : i % SIGNER_COLORS.length
+        const bg     = unassigned ? 'rgba(100,116,139,0.15)' : SIGNER_COLORS[colorIndex % SIGNER_COLORS.length]
+        const border = unassigned ? 'rgb(148,163,184)'       : SIGNER_BORDER_COLORS[colorIndex % SIGNER_BORDER_COLORS.length]
+        const color  = unassigned ? 'rgb(100,116,139)'       : SIGNER_BORDER_COLORS[colorIndex % SIGNER_BORDER_COLORS.length]
         const isCheckbox = field.fieldType === 'checkbox'
         const isRadio = field.fieldType === 'radio'
         const isText = !isCheckbox && !isRadio
@@ -196,10 +200,10 @@ export default function FieldDrawingLayer({
               top: field.canvasRect.y,
               width: field.canvasRect.width,
               height: field.canvasRect.height,
-              background: SIGNER_COLORS[colorIndex % SIGNER_COLORS.length],
-              border: `2px solid ${SIGNER_BORDER_COLORS[colorIndex % SIGNER_BORDER_COLORS.length]}`,
+              background: bg,
+              border: `2px solid ${border}`,
               borderRadius: isRadio ? '50%' : 3,
-              color: SIGNER_BORDER_COLORS[colorIndex % SIGNER_BORDER_COLORS.length],
+              color,
               overflow: 'hidden',
             }}
           >
@@ -257,9 +261,7 @@ export default function FieldDrawingLayer({
         >
           <p className="text-xs font-semibold text-gray-700 mb-2">Assigner à :</p>
 
-          {signers.length === 0 ? (
-            <p className="text-xs text-gray-500">Ajoutez d&apos;abord des signataires.</p>
-          ) : (
+          {signers.length > 0 && (
             <div className="flex flex-col gap-1">
               {signers.map((signer, index) => (
                 <button
@@ -271,8 +273,15 @@ export default function FieldDrawingLayer({
                   {index + 1}. {signer.name}
                 </button>
               ))}
+              <div className="border-t border-gray-100 mt-1 pt-1" />
             </div>
           )}
+          <button
+            className="text-left text-xs px-2 py-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
+            onClick={() => handleAssign(null, -1)}
+          >
+            Sans assignation
+          </button>
 
           {/* Section groupe radio */}
           {activeTool === 'radio' && (

@@ -36,19 +36,21 @@ export default function FieldList({ fields, onRemove }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <Icon size={12} className={`shrink-0 ${meta.color}`} />
-                      <Badge className="bg-indigo-100 text-indigo-700 text-xs shrink-0">
-                        {field.signerName}
-                      </Badge>
+                      {field.signerName ? (
+                        <Badge className="bg-indigo-100 text-indigo-700 text-xs shrink-0">
+                          {field.signerName}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-slate-100 text-slate-400 text-xs shrink-0">
+                          Non assigné
+                        </Badge>
+                      )}
                       {field.groupName && (
                         <Badge className="bg-amber-100 text-amber-700 text-xs shrink-0 font-mono">
                           {field.groupName}
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      x:{Math.round(field.x)} y:{Math.round(field.y)}{' '}
-                      {Math.round(field.width)}×{Math.round(field.height)} pt
-                    </p>
                   </div>
                   <button
                     onClick={() => onRemove(index)}
