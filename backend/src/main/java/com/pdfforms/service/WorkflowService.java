@@ -353,10 +353,8 @@ public class WorkflowService {
 
         // Ajouter le tampon visuel, puis signer de manière incrémentale
         Calendar signDate = Calendar.getInstance();
-        byte[] stampedPdf = pdfBoxService.addSignatureStamp(
-                document.getMasterPdf(), signer.getName(), signDate);
         byte[] signedPdf = pdfBoxService.signPdf(
-                stampedPdf,
+                document.getMasterPdf(),
                 signingKeyPair.getPrivate(),
                 signingCertificate,
                 signer.getSignerId()

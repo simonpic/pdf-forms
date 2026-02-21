@@ -14,14 +14,13 @@ import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.SignatureOptions;
-import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
-import org.apache.pdfbox.pdmodel.interactive.form.PDCheckBox;
-import org.apache.pdfbox.pdmodel.interactive.form.PDField;
-import org.apache.pdfbox.pdmodel.interactive.form.PDRadioButton;
-import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
+import org.apache.pdfbox.pdmodel.interactive.form.*;
 import org.bouncycastle.cert.jcajce.JcaCertStore;
 import org.bouncycastle.cms.CMSProcessableByteArray;
 import org.bouncycastle.cms.CMSSignedData;
@@ -34,6 +33,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,6 +41,8 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.text.Normalizer;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -293,78 +295,6 @@ public class PdfBoxService {
     }
 
     /**
-     * Ajoute une page de signature dédiée à la fin du PDF.
-     * La page affiche le nom du signataire et la date de signature.
-     * Les accents sont normalisés pour la compatibilité avec les polices Type1.
-     * Utilise doc.save() (sauvegarde complète) pour garantir l'inclusion de la nouvelle page.
-     *
-     * @param pdfBytes   bytes du PDF à modifier
-     * @param signerName nom du signataire
-     * @param signDate   date de signature
-     * @return bytes du PDF avec la page de signature ajoutée
-     */
-    public byte[] addSignatureStamp(byte[] pdfBytes, String signerName, Calendar signDate) throws IOException {
-        try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(pdfBytes))) {
-
-            PDType1Font font     = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-            PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-
-            // Normaliser les accents (Type1 ne supporte pas les caractères non-ASCII)
-            String displayName = Normalizer.normalize(signerName, Normalizer.Form.NFD)
-                    .replaceAll("[^\\p{ASCII}]", "");
-            String dateStr = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE)
-                    .format(signDate.getTime());
-
-            // Ajouter une nouvelle page dédiée à la signature
-            PDPage sigPage = new PDPage(PDRectangle.A4);
-            doc.addPage(sigPage);
-
-            float pageW = sigPage.getMediaBox().getWidth();   // 595 pt
-            float pageH = sigPage.getMediaBox().getHeight();  // 842 pt
-
-            try (PDPageContentStream cs = new PDPageContentStream(doc, sigPage)) {
-
-                // Titre
-                cs.setFont(fontBold, 16);
-                cs.setNonStrokingColor(0.15f, 0.25f, 0.55f);
-                cs.beginText();
-                cs.newLineAtOffset(50, pageH - 80);
-                cs.showText("Signature electronique");
-                cs.endText();
-
-                // Ligne séparatrice
-                cs.setStrokingColor(0.6f, 0.7f, 0.9f);
-                cs.setLineWidth(1f);
-                cs.moveTo(50, pageH - 100);
-                cs.lineTo(pageW - 50, pageH - 100);
-                cs.stroke();
-
-                // Nom du signataire
-                cs.setFont(fontBold, 12);
-                cs.setNonStrokingColor(0.1f, 0.1f, 0.1f);
-                cs.beginText();
-                cs.newLineAtOffset(50, pageH - 140);
-                cs.showText("Signe par : " + displayName);
-                cs.endText();
-
-                // Date
-                cs.setFont(font, 11);
-                cs.setNonStrokingColor(0.35f, 0.35f, 0.35f);
-                cs.beginText();
-                cs.newLineAtOffset(50, pageH - 165);
-                cs.showText("Date : " + dateStr);
-                cs.endText();
-            }
-
-            // Sauvegarde complète (non incrémentale) pour garantir l'inclusion de la nouvelle page
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            doc.save(bos);
-            log.info("Page de signature ajoutee pour '{}' ({}).", displayName, dateStr);
-            return bos.toByteArray();
-        }
-    }
-
-    /**
      * Signe le PDF master de manière incrémentale avec le certificat de l'application.
      * Utilise PDFBox + BouncyCastle pour générer une signature PKCS#7 détachée.
      *
@@ -385,8 +315,14 @@ public class PdfBoxService {
             signature.setReason("Signature %s".formatted(signerName));
             signature.setSignDate(Calendar.getInstance());
 
+
             SignatureOptions options = new SignatureOptions();
             options.setPreferredSignatureSize(0x2500); // ~9Ko réservé pour la signature
+
+            var acroForm = doc.getDocumentCatalog().getAcroForm();
+            if (acroForm != null) {
+                acroForm.setNeedAppearances(false);
+            }
 
             doc.addSignature(signature, (InputStream content) -> {
                 try {
