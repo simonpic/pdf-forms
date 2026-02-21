@@ -61,17 +61,29 @@ public class PdfBoxService {
             defaultResources.put(COSName.getPDFName("Helv"), helvetica);
             acroForm.setDefaultResources(defaultResources);
 
+            // NeedAppearances = true : les visionneuses PDF et PDFBox generateAppearances()
+            // génèrent les apparences visuelles (indispensable pour les cases à cocher)
+            acroForm.setNeedAppearances(true);
+
             List<PDField> acroFields = new ArrayList<>();
 
             for (FieldRequest field : fields) {
                 PDPage page = doc.getPage(field.getPage());
+                String fieldType = field.getFieldType() != null ? field.getFieldType() : "text";
 
-                // Créer le champ texte
+                // Tous les types de champs sont représentés comme PDTextField.
+                // PDCheckBox nécessite des streams d'apparence (/AP) explicites pour être
+                // rendu correctement par tous les viewers PDF, même avec NeedAppearances=true.
+                // La sémantique checkbox/radio est portée par /FieldType dans le COSObject,
+                // et les valeurs "true"/"false" sont converties en texte dans applyFieldValues.
                 PDTextField textField = new PDTextField(acroForm);
                 textField.setPartialName(field.getFieldName());
-                textField.setDefaultAppearance("/Helv 10 Tf 0 g");
 
-                // Configurer le widget (annotation visuelle)
+                // Police auto-size (0) pour checkbox/radio (petits champs),
+                // taille fixe 10pt pour les champs texte
+                boolean isToggle = "checkbox".equals(fieldType) || "radio".equals(fieldType);
+                textField.setDefaultAppearance(isToggle ? "/Helv 0 Tf 0 g" : "/Helv 10 Tf 0 g");
+
                 PDAnnotationWidget widget = textField.getWidgets().get(0);
                 widget.setRectangle(new PDRectangle(
                         (float) field.getX(),
@@ -81,19 +93,22 @@ public class PdfBoxService {
                 ));
                 widget.setPage(page);
                 widget.setPrinted(true);
-
-                // Ajouter le widget à la page
                 page.getAnnotations().add(widget);
 
-                // Écrire /Assign dans le COSObject du champ
+                // /Assign : ownership verification
                 textField.getCOSObject().setString(
                         COSName.getPDFName("Assign"),
                         field.getAssignedTo()
                 );
+                // /FieldType : pour la conversion de valeur dans applyFieldValues
+                textField.getCOSObject().setString(
+                        COSName.getPDFName("FieldType"),
+                        fieldType
+                );
 
                 acroFields.add(textField);
-                log.debug("Champ créé : {} assigné à {} à ({},{}) {}x{}",
-                        field.getFieldName(), field.getAssignedTo(),
+                log.debug("Champ créé : {} (type={}) assigné à {} à ({},{}) {}x{}",
+                        field.getFieldName(), fieldType, field.getAssignedTo(),
                         field.getX(), field.getY(), field.getWidth(), field.getHeight());
             }
 
@@ -118,7 +133,9 @@ public class PdfBoxService {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
             PDAcroForm acroForm = doc.getDocumentCatalog().getAcroForm();
             if (acroForm != null) {
-                acroForm.setNeedAppearances(false);
+                // NeedAppearances(true) déclenche generateAppearances() dans flatten(),
+                // ce qui est nécessaire pour rendre correctement les cases à cocher.
+                acroForm.setNeedAppearances(true);
                 acroForm.flatten();
             }
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -165,9 +182,23 @@ public class PdfBoxService {
                 }
 
                 if (field instanceof PDTextField textField) {
-                    textField.setValue(value);
+                    // Lire le type stocké dans le COSObject pour savoir comment convertir la valeur
+                    String storedFieldType = field.getCOSObject()
+                            .getString(COSName.getPDFName("FieldType"));
+                    boolean isToggle = "checkbox".equals(storedFieldType)
+                            || "radio".equals(storedFieldType);
+
+                    if (isToggle) {
+                        // "true" → "X" (visible dans tous les viewers PDF)
+                        // "false" → "" (champ vide, non sélectionné)
+                        boolean checked = "true".equalsIgnoreCase(value);
+                        textField.setValue(checked ? "X" : "");
+                        log.debug("Champ toggle appliqué : {} ({}) = {}", fieldName, storedFieldType, checked);
+                    } else {
+                        textField.setValue(value);
+                        log.debug("Valeur texte appliquée : {} = '{}'", fieldName, value);
+                    }
                     textField.setReadOnly(true);
-                    log.debug("Valeur appliquée : {} = '{}'", fieldName, value);
                 }
             }
 

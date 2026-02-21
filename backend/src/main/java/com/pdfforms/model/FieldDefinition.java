@@ -12,6 +12,8 @@ import lombok.NoArgsConstructor;
 public class FieldDefinition {
     private String fieldName;
     private String assignedTo;   // signerId
+    private String fieldType;    // "text" | "checkbox" | "radio"
+    private String groupName;    // non-null for radio fields (nom du groupe)
     private int page;            // 0-indexed
     private double x;
     private double y;

@@ -42,9 +42,35 @@ export default function SignerPage() {
     return () => { cancelled = true }
   }, [workflowId, signerId])
 
+  // Initialise les valeurs par défaut pour checkbox/radio dès que docData est disponible
+  useEffect(() => {
+    if (!docData?.fields) return
+    setFieldValues((prev) => {
+      const defaults = {}
+      docData.fields.forEach((f) => {
+        if ((f.fieldType === 'checkbox' || f.fieldType === 'radio') && !(f.fieldName in prev)) {
+          defaults[f.fieldName] = f.currentValue || 'false'
+        }
+      })
+      return { ...defaults, ...prev }
+    })
+  }, [docData])
+
   const handleFieldChange = useCallback((fieldName, value) => {
-    setFieldValues((prev) => ({ ...prev, [fieldName]: value }))
-  }, [])
+    setFieldValues((prev) => {
+      const next = { ...prev, [fieldName]: value }
+
+      // Exclusion mutuelle : désélectionner les autres radios du même groupe
+      const field = docData?.fields?.find((f) => f.fieldName === fieldName)
+      if (field?.fieldType === 'radio' && value === 'true') {
+        docData.fields
+          .filter((f) => f.fieldType === 'radio' && f.groupName === field.groupName && f.fieldName !== fieldName)
+          .forEach((f) => { next[f.fieldName] = 'false' })
+      }
+
+      return next
+    })
+  }, [docData])
 
   const handleFill = useCallback(async () => {
     if (!docData) return

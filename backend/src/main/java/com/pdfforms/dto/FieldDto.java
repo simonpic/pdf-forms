@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class FieldDto {
     private String fieldName;
+    private String fieldType;    // "text" | "checkbox" | "radio"
+    private String groupName;    // non-null pour les boutons radio
     private int page;
     private double x;
     private double y;

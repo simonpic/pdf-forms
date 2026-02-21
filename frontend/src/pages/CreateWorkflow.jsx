@@ -11,7 +11,13 @@ import { Label } from '../components/ui/label'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { createWorkflow } from '../api/workflowApi'
-import { Upload, FileText, CheckCircle, Copy, ExternalLink } from 'lucide-react'
+import { Upload, FileText, CheckCircle, Copy, ExternalLink, Type, SquareCheck, CircleDot } from 'lucide-react'
+
+const TOOLS = [
+  { id: 'text',     label: 'Texte',  Icon: Type,        hint: 'Cliquez-glissez sur le PDF pour dessiner un champ texte.' },
+  { id: 'checkbox', label: 'Case',   Icon: SquareCheck, hint: 'Cliquez sur le PDF pour placer une case à cocher.' },
+  { id: 'radio',    label: 'Radio',  Icon: CircleDot,   hint: 'Cliquez sur le PDF pour placer un bouton radio.' },
+]
 
 export default function CreateWorkflow() {
   const navigate = useNavigate()
@@ -24,6 +30,7 @@ export default function CreateWorkflow() {
   const [workflowName, setWorkflowName] = useState('')
   const [signers, setSigners] = useState([])
   const [fields, setFields] = useState([])
+  const [activeTool, setActiveTool] = useState('text')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -75,11 +82,13 @@ export default function CreateWorkflow() {
         fields: fields.map((f) => ({
           fieldName: f.fieldName,
           assignedTo: f.assignedTo,
+          fieldType: f.fieldType ?? 'text',
           page: f.page,
           x: f.x,
           y: f.y,
           width: f.width,
           height: f.height,
+          ...(f.groupName ? { groupName: f.groupName } : {}),
         })),
       }
       const response = await createWorkflow(pdfFile, data)
@@ -202,6 +211,7 @@ export default function CreateWorkflow() {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">
+              {/* Fichier chargé */}
               <div className="flex items-center gap-2 text-sm text-slate-600 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
                 <FileText size={14} className="text-indigo-500" />
                 <span className="font-medium">{pdfFile?.name}</span>
@@ -211,6 +221,24 @@ export default function CreateWorkflow() {
                 >
                   ✕
                 </button>
+              </div>
+
+              {/* Toolbar de sélection du type de champ */}
+              <div className="flex items-center gap-1 bg-white rounded-full border border-slate-200 shadow-sm px-1.5 py-1">
+                {TOOLS.map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTool(id)}
+                    className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                      activeTool === id
+                        ? 'bg-indigo-500 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Icon size={13} />
+                    {label}
+                  </button>
+                ))}
               </div>
 
               <PDFCanvas
@@ -224,6 +252,7 @@ export default function CreateWorkflow() {
                       signers={signers}
                       fields={fields}
                       onFieldAdded={handleFieldAdded}
+                      activeTool={activeTool}
                     />
                   ) : null
                 }
@@ -274,7 +303,7 @@ export default function CreateWorkflow() {
 
           {pdfData && signers.length > 0 && (
             <p className="text-xs text-slate-400 text-center">
-              Cliquez-glissez sur le PDF pour dessiner des champs, puis assignez-les à un signataire.
+              {TOOLS.find((t) => t.id === activeTool)?.hint}
             </p>
           )}
         </div>

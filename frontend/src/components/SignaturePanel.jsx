@@ -2,17 +2,52 @@ import { useState } from 'react'
 import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
-import { PenLine, CheckCircle, AlertCircle } from 'lucide-react'
+import { PenLine, CheckCircle, AlertCircle, Type, SquareCheck, CircleDot } from 'lucide-react'
+
+// Calcule si un champ individuel est "rempli" selon son type
+function isFieldFilled(f, values) {
+  const fieldType = f.fieldType ?? 'text'
+  if (fieldType === 'checkbox') return true  // tout état (coché/décoché) est valide
+  if (fieldType === 'radio') return false    // géré au niveau du groupe ci-dessous
+  const val = values[f.fieldName] ?? f.currentValue ?? ''
+  return val.trim().length > 0
+}
+
+// Construit la liste des "items" à afficher (déduplique les groupes radio)
+function buildDisplayItems(fields, values) {
+  const seenGroups = new Set()
+  const items = []
+
+  for (const f of fields) {
+    const fieldType = f.fieldType ?? 'text'
+
+    if (fieldType === 'radio') {
+      if (seenGroups.has(f.groupName)) continue
+      seenGroups.add(f.groupName)
+      const groupFields = fields.filter((g) => g.fieldType === 'radio' && g.groupName === f.groupName)
+      const selected = groupFields.some((g) => (values[g.fieldName] ?? 'false') === 'true')
+      items.push({ key: f.groupName, label: f.groupName, fieldType: 'radio', filled: selected })
+    } else {
+      items.push({ key: f.fieldName, label: f.fieldName, fieldType, filled: isFieldFilled(f, values) })
+    }
+  }
+
+  return items
+}
+
+const TYPE_ICON = {
+  text:     { Icon: Type,        color: 'text-indigo-400' },
+  checkbox: { Icon: SquareCheck, color: 'text-emerald-400' },
+  radio:    { Icon: CircleDot,   color: 'text-amber-400' },
+}
 
 export default function SignaturePanel({ fields, values, signerName, onFill, onSign }) {
   const [phase, setPhase] = useState('fill') // 'fill' | 'signing' | 'done'
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  const allFilled = fields.every((f) => {
-    const val = values[f.fieldName] ?? f.currentValue ?? ''
-    return val.trim().length > 0
-  })
+  const displayItems = buildDisplayItems(fields, values)
+  const allFilled = displayItems.every((item) => item.filled)
 
   const handleSubmit = async () => {
     setError(null)
@@ -64,14 +99,15 @@ export default function SignaturePanel({ fields, values, signerName, onFill, onS
         {/* État des champs */}
         <div className="space-y-2">
           <p className="text-sm text-slate-600 font-medium">Vos champs à remplir :</p>
-          {fields.map((f) => {
-            const val = values[f.fieldName] ?? f.currentValue ?? ''
-            const filled = val.trim().length > 0
+          {displayItems.map((item) => {
+            const meta = TYPE_ICON[item.fieldType] ?? TYPE_ICON.text
+            const { Icon } = meta
             return (
-              <div key={f.fieldName} className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${filled ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                <span className="text-xs font-mono text-slate-500 truncate flex-1">{f.fieldName}</span>
-                {filled ? (
+              <div key={item.key} className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full shrink-0 ${item.filled ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                <Icon size={11} className={`shrink-0 ${meta.color}`} />
+                <span className="text-xs font-mono text-slate-500 truncate flex-1">{item.label}</span>
+                {item.filled ? (
                   <Badge className="text-xs bg-emerald-100 text-emerald-700">rempli</Badge>
                 ) : (
                   <Badge className="text-xs bg-slate-100 text-slate-500">vide</Badge>
