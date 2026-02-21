@@ -9,6 +9,7 @@ import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
@@ -38,6 +39,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.text.Normalizer;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -285,6 +288,68 @@ public class PdfBoxService {
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             doc.saveIncremental(bos);
+            return bos.toByteArray();
+        }
+    }
+
+    /**
+     * Ajoute un tampon visuel de signature sur la dernière page du PDF.
+     * Le tampon affiche le nom du signataire et la date de signature.
+     * Les accents sont normalisés pour la compatibilité avec les polices Type1.
+     *
+     * @param pdfBytes       bytes du PDF à modifier
+     * @param signerName     nom affiché dans le tampon
+     * @param signDate       date de signature
+     * @return bytes du PDF avec le tampon ajouté
+     */
+    public byte[] addSignatureStamp(byte[] pdfBytes, String signerName, Calendar signDate) throws IOException {
+        try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(pdfBytes))) {
+            PDPage lastPage = doc.getPage(doc.getNumberOfPages() - 1);
+
+            PDType1Font font     = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+
+            // Normaliser les accents (Type1 ne supporte pas les caractères non-ASCII)
+            String displayName = Normalizer.normalize(signerName, Normalizer.Form.NFD)
+                    .replaceAll("[^\\p{ASCII}]", "");
+            String dateStr = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE)
+                    .format(signDate.getTime());
+
+            float stampX = 30;
+            float stampY = 30;
+            float stampW = 185;
+            float stampH = 38;
+
+            try (PDPageContentStream cs = new PDPageContentStream(
+                    doc, lastPage, PDPageContentStream.AppendMode.APPEND, true, true)) {
+
+                // Fond du tampon
+                cs.setNonStrokingColor(0.94f, 0.96f, 1.0f);
+                cs.addRect(stampX, stampY, stampW, stampH);
+                cs.fill();
+
+                // Bordure
+                cs.setStrokingColor(0.6f, 0.7f, 0.9f);
+                cs.setLineWidth(0.5f);
+                cs.addRect(stampX, stampY, stampW, stampH);
+                cs.stroke();
+
+                // Texte
+                cs.beginText();
+                cs.setFont(fontBold, 7.5f);
+                cs.setNonStrokingColor(0.2f, 0.3f, 0.6f);
+                cs.newLineAtOffset(stampX + 7, stampY + stampH - 15);
+                cs.showText("Signe par : " + displayName);
+                cs.setFont(font, 7f);
+                cs.setNonStrokingColor(0.3f, 0.3f, 0.4f);
+                cs.newLineAtOffset(0, -14);
+                cs.showText("Date : " + dateStr);
+                cs.endText();
+            }
+
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            doc.save(bos);
+            log.debug("Tampon visuel ajouté pour '{}' ({}).", displayName, dateStr);
             return bos.toByteArray();
         }
     }
