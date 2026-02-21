@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { FileText, FolderOpen, Clock, Loader2, CheckCircle2, Download } from 'lucide-react'
-import { Card, CardHeader, CardFooter, CardContent } from '../components/ui/card'
+import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Progress } from '../components/ui/progress'
@@ -36,71 +36,63 @@ function WorkflowCard({ workflow }) {
   const showUpdated = createdStr !== updatedStr
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-medium text-gray-900 truncate">{workflow.name}</p>
-            <p className="flex items-center gap-1 text-sm text-gray-400 mt-0.5">
-              <FileText size={12} />
-              <span className="truncate">{workflow.pdfOriginalName}</span>
-            </p>
-          </div>
-          <div className="shrink-0">{STATUS_BADGE[workflow.status]}</div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-3">
-        <div>
-          <p className="text-sm text-gray-500 mb-1.5">
-            {signedCount}/{totalCount} signatures
-          </p>
-          <Progress value={progress} />
-        </div>
-        <div className="space-y-1.5">
-          {[...workflow.signers]
-            .sort((a, b) => a.order - b.order)
-            .map((signer) => (
-              <div key={signer.order} className="flex items-center gap-2 text-sm">
-                {SIGNER_ICON[signer.status]}
-                <span className="text-gray-400 text-xs w-24 shrink-0">
-                  Signataire {signer.order}
-                </span>
-                <span className="text-gray-700 truncate">{signer.name}</span>
-                {signer.status === 'IN_PROGRESS' && (
-                  <a
-                    href={`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-blue-500 hover:text-blue-700 hover:underline truncate"
-                  >
-                    {`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
-                  </a>
-                )}
-              </div>
-            ))}
-        </div>
-      </CardContent>
-
-      <CardFooter className="justify-between text-xs text-gray-400">
-        <div className="space-y-0.5">
-          <p>Créé le {createdStr}</p>
-          {showUpdated && <p>Mis à jour le {updatedStr}</p>}
-        </div>
+    <Card className="p-3 space-y-2">
+      {/* Ligne 1 : nom + badge + bouton télécharger */}
+      <div className="flex items-center gap-2">
+        <p className="font-medium text-sm text-gray-900 truncate flex-1">{workflow.name}</p>
+        {STATUS_BADGE[workflow.status]}
         {workflow.status === 'COMPLETED' && (
           <Button
             size="sm"
             variant="outline"
-            className="gap-1.5"
-            onClick={() =>
-              downloadWorkflowPdf(workflow.id, `${workflow.name}-signé.pdf`)
-            }
+            className="gap-1 h-6 px-2 text-xs shrink-0"
+            onClick={() => downloadWorkflowPdf(workflow.id, `${workflow.name}-signé.pdf`)}
           >
-            <Download size={14} />
+            <Download size={12} />
             Télécharger
           </Button>
         )}
-      </CardFooter>
+      </div>
+
+      {/* Ligne 2 : fichier + dates */}
+      <div className="flex items-center gap-3 text-xs text-gray-400 min-w-0">
+        <span className="flex items-center gap-1 truncate">
+          <FileText size={11} className="shrink-0" />
+          {workflow.pdfOriginalName}
+        </span>
+        <span className="shrink-0">
+          {createdStr}{showUpdated ? ` · maj ${updatedStr}` : ''}
+        </span>
+      </div>
+
+      {/* Ligne 3 : barre de progression */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500 shrink-0">{signedCount}/{totalCount} signatures</span>
+        <Progress value={progress} className="flex-1" />
+      </div>
+
+      {/* Signataires */}
+      <div className="space-y-1">
+        {[...workflow.signers]
+          .sort((a, b) => a.order - b.order)
+          .map((signer) => (
+            <div key={signer.order} className="flex items-center gap-1.5 text-xs">
+              {SIGNER_ICON[signer.status]}
+              <span className="text-gray-400 shrink-0">#{signer.order}</span>
+              <span className="text-gray-700 truncate">{signer.name}</span>
+              {signer.status === 'IN_PROGRESS' && (
+                <a
+                  href={`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-500 hover:text-blue-700 hover:underline truncate"
+                >
+                  {`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
+                </a>
+              )}
+            </div>
+          ))}
+      </div>
     </Card>
   )
 }
