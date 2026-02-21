@@ -64,7 +64,7 @@ export default function FieldDrawingLayer({
   }
 
   const handleMouseDown = useCallback((e) => {
-    if (showPopup) return
+    if (showPopup) { handleCancelPopup(); return }
     e.preventDefault()
     const pos = getRelativePos(e)
 
@@ -367,12 +367,6 @@ export default function FieldDrawingLayer({
             </div>
           )}
 
-          <button
-            className="mt-2 w-full text-xs text-gray-400 hover:text-gray-600 transition-colors"
-            onClick={handleCancelPopup}
-          >
-            Annuler
-          </button>
         </div>
       )}
     </div>
