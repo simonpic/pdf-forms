@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import PDFCanvas from '../components/PDFCanvas'
 import FieldDrawingLayer from '../components/FieldDrawingLayer'
 import FieldList from '../components/FieldList'
@@ -12,6 +14,9 @@ import { createWorkflow } from '../api/workflowApi'
 import { Upload, FileText, CheckCircle, Copy, ExternalLink } from 'lucide-react'
 
 export default function CreateWorkflow() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
   // État du PDF uploadé
   const [pdfFile, setPdfFile] = useState(null)
   const [pdfData, setPdfData] = useState(null) // ArrayBuffer pour PDF.js
@@ -101,6 +106,8 @@ export default function CreateWorkflow() {
 
       const response = await createWorkflow(pdfFile, data)
       setResult(response)
+      await queryClient.invalidateQueries({ queryKey: ['workflows'] })
+      navigate('/dashboard')
     } catch (err) {
       setError(err.message)
     } finally {

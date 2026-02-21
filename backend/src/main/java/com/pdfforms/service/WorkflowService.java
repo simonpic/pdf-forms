@@ -39,8 +39,46 @@ public class WorkflowService {
      * 3. Génère le PDF aplati initial
      * 4. Persiste le workflow et son document en base MongoDB
      */
+    public List<WorkflowSummaryDto> listWorkflows() {
+        return workflowRepository.findAll().stream()
+                .map(this::toSummaryDto)
+                .sorted(Comparator.comparing(WorkflowSummaryDto::getUpdatedAt).reversed())
+                .collect(Collectors.toList());
+    }
+
+    private WorkflowSummaryDto toSummaryDto(Workflow workflow) {
+        List<WorkflowSummaryDto.SignerSummary> signerSummaries = workflow.getSigners().stream()
+                .map(signer -> {
+                    String displayStatus;
+                    if (signer.getStatus() == SignerStatus.SIGNED) {
+                        displayStatus = "SIGNED";
+                    } else if (signer.getOrder() == workflow.getCurrentSignerOrder()) {
+                        displayStatus = "IN_PROGRESS";
+                    } else {
+                        displayStatus = "PENDING";
+                    }
+                    return WorkflowSummaryDto.SignerSummary.builder()
+                            .name(signer.getName())
+                            .order(signer.getOrder())
+                            .status(displayStatus)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        return WorkflowSummaryDto.builder()
+                .id(workflow.getId())
+                .name(workflow.getName())
+                .pdfOriginalName(workflow.getPdfOriginalName())
+                .status(workflow.getStatus().name())
+                .createdAt(workflow.getCreatedAt())
+                .updatedAt(workflow.getUpdatedAt())
+                .signers(signerSummaries)
+                .build();
+    }
+
     public WorkflowCreateResponse createWorkflow(byte[] originalPdfBytes,
-                                                  WorkflowCreateRequest request) throws Exception {
+                                                  WorkflowCreateRequest request,
+                                                  String pdfOriginalName) throws Exception {
         log.info("Création du workflow '{}' avec {} signataires et {} champs.",
                 request.getName(), request.getSigners().size(), request.getFields().size());
 
@@ -66,6 +104,7 @@ public class WorkflowService {
         // 4. Persister le workflow
         Workflow workflow = Workflow.builder()
                 .name(request.getName())
+                .pdfOriginalName(pdfOriginalName)
                 .status(WorkflowStatus.IN_PROGRESS)
                 .signers(signers)
                 .currentSignerOrder(firstOrder)
@@ -334,7 +373,7 @@ public class WorkflowService {
                         "Workflow introuvable : " + workflowId));
 
         if (workflow.getStatus() != WorkflowStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Le workflow n'est pas encore complété (statut : " + workflow.getStatus() + ").");
         }
 

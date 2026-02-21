@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -21,6 +22,15 @@ public class WorkflowController {
 
     private final WorkflowService workflowService;
     private final ObjectMapper objectMapper;
+
+    /**
+     * GET /api/workflows
+     * Retourne la liste résumée de tous les workflows, triée par updatedAt décroissant.
+     */
+    @GetMapping
+    public ResponseEntity<List<WorkflowSummaryDto>> listWorkflows() {
+        return ResponseEntity.ok(workflowService.listWorkflows());
+    }
 
     /**
      * POST /api/workflows
@@ -36,7 +46,8 @@ public class WorkflowController {
                 file.getOriginalFilename(), file.getSize());
 
         WorkflowCreateRequest request = objectMapper.readValue(dataJson, WorkflowCreateRequest.class);
-        WorkflowCreateResponse response = workflowService.createWorkflow(file.getBytes(), request);
+        WorkflowCreateResponse response = workflowService.createWorkflow(
+                file.getBytes(), request, file.getOriginalFilename());
 
         return ResponseEntity.ok(response);
     }
