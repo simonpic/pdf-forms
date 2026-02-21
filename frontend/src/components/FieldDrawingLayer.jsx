@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, Fragment } from 'react'
+import { GripVertical } from 'lucide-react'
 
 const SIGNER_COLORS = [
   'rgba(59, 130, 246, 0.35)',
@@ -20,6 +21,9 @@ const SIGNER_BORDER_COLORS = [
 const CHECKBOX_SIZE_PX = 20
 const RADIO_SIZE_PX = 18
 
+// Taille de la poignée de déplacement (checkbox/radio)
+const HANDLE_SIZE = 14
+
 /**
  * Couche de dessin superposée au canvas PDF.js.
  *
@@ -37,6 +41,7 @@ export default function FieldDrawingLayer({
   fields,
   onFieldAdded,
   onFieldReassigned,
+  onFieldMoved,
   activeTool = 'text',
 }) {
   const [drawing, setDrawing] = useState(false)
@@ -47,6 +52,9 @@ export default function FieldDrawingLayer({
   const [radioGroupName, setRadioGroupName] = useState('groupe_1')
   const [hoveredFieldIndex, setHoveredFieldIndex] = useState(-1)
   const [reassigningFieldIndex, setReassigningFieldIndex] = useState(null)
+  // dragState : { fieldIndex, startPos, startCanvasRect, isActive }
+  const [dragState, setDragState] = useState(null)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const layerRef = useRef(null)
 
   // Réinitialise l'état de dessin quand l'outil change
@@ -64,21 +72,42 @@ export default function FieldDrawingLayer({
   }
 
   const handleMouseDown = useCallback((e) => {
-    if (showPopup) { handleCancelPopup(); return }
+    if (showPopup) {
+      setShowPopup(false); setPendingRect(null); setCurrentRect(null)
+      setStartPos(null); setReassigningFieldIndex(null)
+      return
+    }
     e.preventDefault()
     const pos = getRelativePos(e)
 
-    // Clic sur un champ existant → mode réassignation
+    // 1. Poignée de drag (checkbox/radio) — priorité max
+    for (let i = fields.length - 1; i >= 0; i--) {
+      if (fields[i].fieldType !== 'text' && isInHandleZone(fields[i], pos)) {
+        setDragState({ fieldIndex: i, startPos: pos, startCanvasRect: { ...fields[i].canvasRect }, isActive: false })
+        setHoveredFieldIndex(-1)
+        return
+      }
+    }
+
+    // 2. Corps d'un champ existant
     const hitIndex = getFieldAtPos(fields, pos)
     if (hitIndex !== -1) {
       const field = fields[hitIndex]
-      setReassigningFieldIndex(hitIndex)
-      setPendingRect(field.canvasRect)
-      if (field.fieldType === 'radio') setRadioGroupName(field.groupName || 'groupe_1')
-      setShowPopup(true)
+      if (field.fieldType === 'text') {
+        // Champ texte : potentiel drag, disambiguation au move
+        setDragState({ fieldIndex: hitIndex, startPos: pos, startCanvasRect: { ...field.canvasRect }, isActive: false })
+        setHoveredFieldIndex(-1)
+      } else {
+        // Checkbox/radio corps → popup d'assignation
+        setReassigningFieldIndex(hitIndex)
+        setPendingRect(field.canvasRect)
+        if (field.fieldType === 'radio') setRadioGroupName(field.groupName || 'groupe_1')
+        setShowPopup(true)
+      }
       return
     }
 
+    // 3. Zone vide → dessin
     setStartPos(pos)
     if (activeTool === 'text') {
       setDrawing(true)
@@ -89,10 +118,23 @@ export default function FieldDrawingLayer({
   const handleMouseMove = useCallback((e) => {
     const pos = getRelativePos(e)
 
+    // Drag actif
+    if (dragState) {
+      const dx = pos.x - dragState.startPos.x
+      const dy = pos.y - dragState.startPos.y
+      if (!dragState.isActive && Math.sqrt(dx * dx + dy * dy) > 5) {
+        setDragState(prev => ({ ...prev, isActive: true }))
+      }
+      if (dragState.isActive) setDragOffset({ x: dx, y: dy })
+      return
+    }
+
+    // Hover detection
     if (!drawing && !showPopup) {
       setHoveredFieldIndex(getFieldAtPos(fields, pos))
     }
 
+    // Dessin texte
     if (!drawing || !startPos || activeTool !== 'text') return
     setCurrentRect({
       x: Math.min(startPos.x, pos.x),
@@ -100,9 +142,40 @@ export default function FieldDrawingLayer({
       width: Math.abs(pos.x - startPos.x),
       height: Math.abs(pos.y - startPos.y),
     })
-  }, [drawing, startPos, activeTool, fields, showPopup])
+  }, [drawing, startPos, activeTool, fields, showPopup, dragState])
 
   const handleMouseUp = useCallback(() => {
+    // Finalisation d'un drag
+    if (dragState) {
+      if (dragState.isActive) {
+        const { fieldIndex, startCanvasRect } = dragState
+        const newCanvasRect = {
+          x: startCanvasRect.x + dragOffset.x,
+          y: startCanvasRect.y + dragOffset.y,
+          width: startCanvasRect.width,
+          height: startCanvasRect.height,
+        }
+        const pdfX = newCanvasRect.x / scale
+        const pdfY = pageHeightPt - (newCanvasRect.y + newCanvasRect.height) / scale
+        onFieldMoved(fieldIndex, {
+          canvasRect: newCanvasRect,
+          x: Math.round(pdfX * 100) / 100,
+          y: Math.round(pdfY * 100) / 100,
+        })
+      } else {
+        // Pas de mouvement → clic → popup d'assignation (texte uniquement)
+        const field = fields[dragState.fieldIndex]
+        setReassigningFieldIndex(dragState.fieldIndex)
+        setPendingRect(field.canvasRect)
+        if (field.fieldType === 'radio') setRadioGroupName(field.groupName || 'groupe_1')
+        setShowPopup(true)
+      }
+      setDragState(null)
+      setDragOffset({ x: 0, y: 0 })
+      return
+    }
+
+    // Dessin normal
     if (!startPos) return
 
     if (activeTool === 'text') {
@@ -115,7 +188,6 @@ export default function FieldDrawingLayer({
         setStartPos(null)
       }
     } else {
-      // Case à cocher ou bouton radio : placement au clic
       const size = activeTool === 'checkbox' ? CHECKBOX_SIZE_PX : RADIO_SIZE_PX
       setPendingRect({
         x: startPos.x - size / 2,
@@ -123,18 +195,15 @@ export default function FieldDrawingLayer({
         width: size,
         height: size,
       })
-
       if (activeTool === 'radio') {
-        // Pré-remplir avec le dernier groupe utilisé, ou créer le premier
         const existingGroups = getExistingRadioGroups(fields)
         const last = existingGroups[existingGroups.length - 1]
         setRadioGroupName(last ?? 'groupe_1')
       }
-
       setStartPos(null)
       setShowPopup(true)
     }
-  }, [startPos, activeTool, currentRect, fields])
+  }, [dragState, dragOffset, startPos, activeTool, currentRect, fields, scale, pageHeightPt, onFieldMoved])
 
   const handleAssign = (signer, index) => {
     if (reassigningFieldIndex !== null) {
@@ -203,7 +272,8 @@ export default function FieldDrawingLayer({
     <div
       ref={layerRef}
       className={`absolute inset-0 ${
-        showPopup          ? 'cursor-default'
+        showPopup                ? 'cursor-default'
+        : dragState?.isActive   ? 'cursor-grabbing'
         : hoveredFieldIndex !== -1 ? 'cursor-pointer'
         : 'cursor-crosshair'
       }`}
@@ -221,6 +291,16 @@ export default function FieldDrawingLayer({
     >
       {/* Champs déjà placés */}
       {fields.map((field, i) => {
+        const isDragged = dragState?.isActive && dragState.fieldIndex === i
+        const rect = isDragged
+          ? {
+              x: dragState.startCanvasRect.x + dragOffset.x,
+              y: dragState.startCanvasRect.y + dragOffset.y,
+              width: dragState.startCanvasRect.width,
+              height: dragState.startCanvasRect.height,
+            }
+          : field.canvasRect
+
         const unassigned = !field.signerName
         const colorIndex = field.signerIndex >= 0 ? field.signerIndex : i % SIGNER_COLORS.length
         const bg     = unassigned ? 'rgba(100,116,139,0.15)' : SIGNER_COLORS[colorIndex % SIGNER_COLORS.length]
@@ -229,33 +309,51 @@ export default function FieldDrawingLayer({
         const isCheckbox = field.fieldType === 'checkbox'
         const isRadio = field.fieldType === 'radio'
         const isText = !isCheckbox && !isRadio
+        const showHandle = !isText && (hoveredFieldIndex === i || dragState?.fieldIndex === i)
 
         return (
-          <div
-            key={field.fieldName}
-            className="absolute flex items-center justify-center pointer-events-none select-none"
-            style={{
-              left: field.canvasRect.x,
-              top: field.canvasRect.y,
-              width: field.canvasRect.width,
-              height: field.canvasRect.height,
-              background: bg,
-              border: `2px solid ${border}`,
-              borderRadius: isRadio ? '50%' : 3,
-              color,
-              overflow: 'hidden',
-            }}
-          >
-            {isCheckbox && (
-              <span style={{ fontSize: Math.round(field.canvasRect.width * 0.6), lineHeight: 1 }}>☑</span>
+          <Fragment key={field.fieldName}>
+            <div
+              className="absolute flex items-center justify-center pointer-events-none select-none"
+              style={{
+                left: rect.x,
+                top: rect.y,
+                width: rect.width,
+                height: rect.height,
+                background: bg,
+                border: `2px solid ${border}`,
+                borderRadius: isRadio ? '50%' : 3,
+                color,
+                overflow: 'hidden',
+              }}
+            >
+              {isCheckbox && (
+                <span style={{ fontSize: Math.round(rect.width * 0.6), lineHeight: 1 }}>☑</span>
+              )}
+              {isRadio && (
+                <span style={{ fontSize: Math.round(rect.width * 0.55), lineHeight: 1 }}>◉</span>
+              )}
+              {isText && (
+                <span className="text-xs px-1 truncate font-medium">{field.signerName}</span>
+              )}
+            </div>
+
+            {/* Poignée de déplacement (checkbox / radio) */}
+            {showHandle && (
+              <div
+                className="absolute flex items-center justify-center bg-white border border-slate-300 rounded-sm shadow-sm pointer-events-none select-none"
+                style={{
+                  left: rect.x + rect.width - HANDLE_SIZE / 2,
+                  top: rect.y - HANDLE_SIZE / 2,
+                  width: HANDLE_SIZE,
+                  height: HANDLE_SIZE,
+                  cursor: 'grab',
+                }}
+              >
+                <GripVertical size={8} className="text-slate-400" />
+              </div>
             )}
-            {isRadio && (
-              <span style={{ fontSize: Math.round(field.canvasRect.width * 0.55), lineHeight: 1 }}>◉</span>
-            )}
-            {isText && (
-              <span className="text-xs px-1 truncate font-medium">{field.signerName}</span>
-            )}
-          </div>
+          </Fragment>
         )
       })}
 
@@ -373,9 +471,27 @@ export default function FieldDrawingLayer({
   )
 }
 
+function getHandleRect(canvasRect) {
+  return {
+    x: canvasRect.x + canvasRect.width - HANDLE_SIZE / 2,
+    y: canvasRect.y - HANDLE_SIZE / 2,
+  }
+}
+
+function isInHandleZone(field, pos) {
+  if (field.fieldType === 'text') return false
+  const h = getHandleRect(field.canvasRect)
+  return (
+    pos.x >= h.x && pos.x <= h.x + HANDLE_SIZE &&
+    pos.y >= h.y && pos.y <= h.y + HANDLE_SIZE
+  )
+}
+
 function getFieldAtPos(fields, pos) {
   for (let i = fields.length - 1; i >= 0; i--) {
-    const { canvasRect } = fields[i]
+    const { canvasRect, fieldType } = fields[i]
+    // Inclure la zone de poignée dans la détection du hover
+    if (fieldType !== 'text' && isInHandleZone(fields[i], pos)) return i
     if (
       pos.x >= canvasRect.x &&
       pos.x <= canvasRect.x + canvasRect.width &&

@@ -66,6 +66,10 @@ export default function CreateWorkflow() {
     setFields((prev) => prev.map((f, i) => i === index ? { ...f, ...updates } : f))
   }, [])
 
+  const handleFieldMoved = useCallback((index, updates) => {
+    setFields((prev) => prev.map((f, i) => i === index ? { ...f, ...updates } : f))
+  }, [])
+
   const handleFieldRemoved = (index) => {
     setFields((prev) => prev.filter((_, i) => i !== index))
   }
@@ -202,6 +206,7 @@ export default function CreateWorkflow() {
                       fields={fields}
                       onFieldAdded={handleFieldAdded}
                       onFieldReassigned={handleFieldReassigned}
+                      onFieldMoved={handleFieldMoved}
                       activeTool={activeTool}
                     />
                   ) : null
