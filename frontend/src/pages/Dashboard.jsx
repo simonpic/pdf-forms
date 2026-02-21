@@ -67,6 +67,16 @@ function WorkflowCard({ workflow }) {
                   Signataire {signer.order}
                 </span>
                 <span className="text-gray-700 truncate">{signer.name}</span>
+                {signer.status === 'IN_PROGRESS' && (
+                  <a
+                    href={`${window.location.origin}/signature/${signer.signerId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-500 hover:text-blue-700 hover:underline truncate"
+                  >
+                    {`${window.location.origin}/signature/${signer.signerId}`}
+                  </a>
+                )}
               </div>
             ))}
         </div>

@@ -28,6 +28,7 @@ public class WorkflowSummaryDto {
     @AllArgsConstructor
     public static class SignerSummary {
         private String name;
+        private String signerId;
         private int order;
         private String status; // PENDING | IN_PROGRESS | SIGNED
     }

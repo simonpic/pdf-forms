@@ -59,6 +59,7 @@ public class WorkflowService {
                     }
                     return WorkflowSummaryDto.SignerSummary.builder()
                             .name(signer.getName())
+                            .signerId(signer.getSignerId())
                             .order(signer.getOrder())
                             .status(displayStatus)
                             .build();
