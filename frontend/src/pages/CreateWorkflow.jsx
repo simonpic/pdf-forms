@@ -207,6 +207,7 @@ export default function CreateWorkflow() {
                       onFieldAdded={handleFieldAdded}
                       onFieldReassigned={handleFieldReassigned}
                       onFieldMoved={handleFieldMoved}
+                      onFieldRemoved={handleFieldRemoved}
                       activeTool={activeTool}
                     />
                   ) : null

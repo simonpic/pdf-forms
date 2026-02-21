@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, Fragment } from 'react'
-import { GripVertical } from 'lucide-react'
+import { GripVertical, Trash2 } from 'lucide-react'
 
 const SIGNER_COLORS = [
   'rgba(59, 130, 246, 0.35)',
@@ -42,6 +42,7 @@ export default function FieldDrawingLayer({
   onFieldAdded,
   onFieldReassigned,
   onFieldMoved,
+  onFieldRemoved,
   activeTool = 'text',
 }) {
   const [drawing, setDrawing] = useState(false)
@@ -419,6 +420,24 @@ export default function FieldDrawingLayer({
           >
             Sans assignation
           </button>
+
+          {/* Suppression — uniquement en mode réassignation */}
+          {reassigningFieldIndex !== null && (
+            <div className="mt-2 pt-2 border-t border-gray-100">
+              <button
+                className="flex items-center gap-1.5 w-full text-left text-xs px-2 py-1.5 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                onClick={() => {
+                  onFieldRemoved(reassigningFieldIndex)
+                  setShowPopup(false)
+                  setPendingRect(null)
+                  setReassigningFieldIndex(null)
+                }}
+              >
+                <Trash2 size={11} />
+                Supprimer le champ
+              </button>
+            </div>
+          )}
 
           {/* Section groupe radio */}
           {(reassigningFieldIndex !== null
