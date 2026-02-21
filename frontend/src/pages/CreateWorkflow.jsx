@@ -144,31 +144,21 @@ export default function CreateWorkflow() {
         {/* Sidebar verticale — outils de champ (visible uniquement avec un PDF chargé) */}
         {pdfData && (
           <div className="w-12 bg-white border-r border-slate-200 flex flex-col items-center pt-4 pb-3 gap-1 shrink-0">
-            {TOOLS.map(({ id, label, Icon, hint }) => {
-              const noSigners = signers.length === 0
-              return (
-                <Tooltip
-                  key={id}
-                  content={noSigners ? 'Ajoutez un signataire avant de placer des champs.' : hint}
-                  side="right"
+            {TOOLS.map(({ id, label, Icon, hint }) => (
+              <Tooltip key={id} content={hint} side="right">
+                <button
+                  aria-label={label}
+                  onClick={() => setActiveTool(id)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                    activeTool === id
+                      ? 'bg-indigo-500 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                  }`}
                 >
-                  <button
-                    aria-label={label}
-                    disabled={noSigners}
-                    onClick={() => !noSigners && setActiveTool(id)}
-                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
-                      noSigners
-                        ? 'text-slate-200 cursor-not-allowed'
-                        : activeTool === id
-                          ? 'bg-indigo-500 text-white shadow-sm'
-                          : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Icon size={16} />
-                  </button>
-                </Tooltip>
-              )
-            })}
+                  <Icon size={16} />
+                </button>
+              </Tooltip>
+            ))}
           </div>
         )}
 
