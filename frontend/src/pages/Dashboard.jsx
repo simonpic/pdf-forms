@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { FileText, FolderOpen, Clock, Loader2, CheckCircle2, Download } from 'lucide-react'
+import { FileText, FolderOpen, Clock, PenLine, CheckCircle2, Download } from 'lucide-react'
 import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -31,7 +31,7 @@ const PROGRESS_COLOR = {
 
 const SIGNER_ICON = {
   PENDING: <Clock size={13} className="text-slate-300 shrink-0" />,
-  IN_PROGRESS: <Loader2 size={13} className="text-amber-500 animate-spin shrink-0" />,
+  IN_PROGRESS: <PenLine size={13} className="text-amber-500 shrink-0" />,
   SIGNED: <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />,
 }
 
