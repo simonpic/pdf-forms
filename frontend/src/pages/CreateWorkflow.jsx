@@ -274,46 +274,52 @@ export default function CreateWorkflow() {
         </div>
 
         {/* Panneau droit — configuration */}
-        <div className="w-80 bg-white border-l border-slate-200 overflow-y-auto p-4 space-y-4">
-          {/* Nom du workflow */}
-          <Card>
-            <CardContent className="pt-4 space-y-2">
-              <Label htmlFor="workflow-name">Nom du workflow</Label>
-              <Input
-                id="workflow-name"
-                value={workflowName}
-                onChange={(e) => setWorkflowName(e.target.value)}
-                placeholder="Ex: Contrat de vente"
-              />
-            </CardContent>
-          </Card>
+        <div className="w-80 bg-white border-l border-slate-200 flex flex-col">
+          {/* Zone scrollable — formulaire */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Nom du workflow */}
+            <Card>
+              <CardContent className="pt-4 space-y-2">
+                <Label htmlFor="workflow-name">Nom du workflow</Label>
+                <Input
+                  id="workflow-name"
+                  value={workflowName}
+                  onChange={(e) => setWorkflowName(e.target.value)}
+                  placeholder="Ex: Contrat de vente"
+                />
+              </CardContent>
+            </Card>
 
-          <SignerList signers={signers} onChange={setSigners} />
+            <SignerList signers={signers} onChange={setSigners} />
 
-          <FieldList fields={fields} onRemove={handleFieldRemoved} />
+            <FieldList fields={fields} onRemove={handleFieldRemoved} />
 
-          {error && (
-            <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+          </div>
 
-          <Button
-            className="w-full bg-indigo-500 hover:bg-indigo-600"
-            disabled={
-              submitting || !pdfFile || !workflowName.trim() ||
-              signers.length === 0 || fields.length === 0
-            }
-            onClick={handleSubmit}
-          >
-            {submitting ? 'Création en cours…' : 'Créer le workflow'}
-          </Button>
+          {/* Footer fixe — bouton de soumission */}
+          <div className="border-t border-slate-200 p-4 space-y-2">
+            <Button
+              className="w-full bg-indigo-500 hover:bg-indigo-600"
+              disabled={
+                submitting || !pdfFile || !workflowName.trim() ||
+                signers.length === 0 || fields.length === 0
+              }
+              onClick={handleSubmit}
+            >
+              {submitting ? 'Création en cours…' : 'Créer le workflow'}
+            </Button>
 
-          {pdfData && signers.length > 0 && (
-            <p className="text-xs text-slate-400 text-center">
-              {TOOLS.find((t) => t.id === activeTool)?.hint}
-            </p>
-          )}
+            {pdfData && signers.length > 0 && (
+              <p className="text-xs text-slate-400 text-center">
+                {TOOLS.find((t) => t.id === activeTool)?.hint}
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
