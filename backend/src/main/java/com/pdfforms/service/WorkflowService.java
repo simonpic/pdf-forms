@@ -161,82 +161,67 @@ public class WorkflowService {
 
     /**
      * Retourne le document pour le signataire si c'est bien son tour.
+     * Récupère directement le workflow par workflowId (O(1) vs scan complet).
      * Régénère le flattenedPdf si flattenedStale == true.
      * Retourne 403 avec un message explicite sinon.
      */
-    public SignerDocumentResponse getDocumentForSigner(String signerName) throws Exception {
-        String signerId = slugify(signerName);
-        log.info("Recherche du document pour signerName='{}' (signerId='{}').", signerName, signerId);
+    public SignerDocumentResponse getDocumentForSigner(String workflowId, String signerId) throws Exception {
+        log.info("Recherche du document pour workflowId='{}', signerId='{}'.", workflowId, signerId);
 
-        // Trouver les workflows contenant ce signataire
-        List<Workflow> workflows = workflowRepository.findBySigners_SignerId(signerId);
-        if (workflows.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Signataire inconnu.");
+        Workflow workflow = workflowRepository.findById(workflowId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Workflow introuvable : " + workflowId));
+
+        Signer signer = workflow.getSigners().stream()
+                .filter(s -> s.getSignerId().equals(signerId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Signataire inconnu dans ce workflow."));
+
+        if (signer.getStatus() == SignerStatus.SIGNED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Vous avez déjà signé ce document.");
         }
 
-        for (Workflow workflow : workflows) {
-            Optional<Signer> signerOpt = workflow.getSigners().stream()
-                    .filter(s -> s.getSignerId().equals(signerId))
-                    .findFirst();
-
-            if (signerOpt.isEmpty()) continue;
-
-            Signer signer = signerOpt.get();
-
-            // Vérifier si déjà signé
-            if (signer.getStatus() == SignerStatus.SIGNED) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "Vous avez déjà signé ce document.");
-            }
-
-            // Vérifier si c'est son tour
-            if (signer.getOrder() != workflow.getCurrentSignerOrder()) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "Ce n'est pas encore votre tour. Veuillez patienter que les signataires précédents aient signé.");
-            }
-
-            // C'est son tour : récupérer le document
-            WorkflowDocument document = documentRepository.findByWorkflowId(workflow.getId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                            "Document introuvable pour le workflow " + workflow.getId()));
-
-            // Régénérer le PDF aplati si nécessaire
-            if (document.isFlattenedStale()) {
-                log.info("Régénération du flattenedPdf pour workflowId={}.", workflow.getId());
-                byte[] freshFlattened = pdfBoxService.flattenPdf(document.getMasterPdf());
-                document.setFlattenedPdf(freshFlattened);
-                document.setFlattenedStale(false);
-                documentRepository.save(document);
-            }
-
-            // Filtrer les champs du signataire
-            List<FieldDto> signerFields = document.getFields().stream()
-                    .filter(f -> f.getAssignedTo().equals(signerId))
-                    .map(f -> FieldDto.builder()
-                            .fieldName(f.getFieldName())
-                            .page(f.getPage())
-                            .x(f.getX())
-                            .y(f.getY())
-                            .width(f.getWidth())
-                            .height(f.getHeight())
-                            .currentValue(f.getCurrentValue())
-                            .build())
-                    .collect(Collectors.toList());
-
-            String pdfBase64 = Base64.getEncoder().encodeToString(document.getFlattenedPdf());
-
-            return SignerDocumentResponse.builder()
-                    .workflowId(workflow.getId())
-                    .signerName(signer.getName())
-                    .signerId(signer.getSignerId())
-                    .pdfBase64(pdfBase64)
-                    .fields(signerFields)
-                    .build();
+        if (signer.getOrder() != workflow.getCurrentSignerOrder()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Ce n'est pas encore votre tour. Veuillez patienter que les signataires précédents aient signé.");
         }
 
-        // Aucun workflow actif trouvé pour ce signataire
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "Aucun workflow en attente pour ce signataire.");
+        WorkflowDocument document = documentRepository.findByWorkflowId(workflowId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Document introuvable pour le workflow " + workflowId));
+
+        if (document.isFlattenedStale()) {
+            log.info("Régénération du flattenedPdf pour workflowId={}.", workflowId);
+            byte[] freshFlattened = pdfBoxService.flattenPdf(document.getMasterPdf());
+            document.setFlattenedPdf(freshFlattened);
+            document.setFlattenedStale(false);
+            documentRepository.save(document);
+        }
+
+        List<FieldDto> signerFields = document.getFields().stream()
+                .filter(f -> f.getAssignedTo().equals(signerId))
+                .map(f -> FieldDto.builder()
+                        .fieldName(f.getFieldName())
+                        .page(f.getPage())
+                        .x(f.getX())
+                        .y(f.getY())
+                        .width(f.getWidth())
+                        .height(f.getHeight())
+                        .currentValue(f.getCurrentValue())
+                        .build())
+                .collect(Collectors.toList());
+
+        String pdfBase64 = Base64.getEncoder().encodeToString(document.getFlattenedPdf());
+
+        return SignerDocumentResponse.builder()
+                .workflowId(workflowId)
+                .signerName(signer.getName())
+                .signerId(signer.getSignerId())
+                .pdfBase64(pdfBase64)
+                .fields(signerFields)
+                .build();
     }
 
     // -------------------------------------------------------------------------

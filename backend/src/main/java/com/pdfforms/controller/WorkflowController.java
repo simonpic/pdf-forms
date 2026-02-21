@@ -53,16 +53,17 @@ public class WorkflowController {
     }
 
     /**
-     * GET /api/workflows/signer/{signerName}
+     * GET /api/workflows/{workflowId}/signer/{signerId}
      * Retourne le document pour le signataire si c'est son tour.
      * Retourne 403 avec un message explicite sinon.
      */
-    @GetMapping("/signer/{signerName}")
+    @GetMapping("/{workflowId}/signer/{signerId}")
     public ResponseEntity<SignerDocumentResponse> getDocumentForSigner(
-            @PathVariable String signerName) throws Exception {
+            @PathVariable String workflowId,
+            @PathVariable String signerId) throws Exception {
 
-        log.info("GET /api/workflows/signer/{}", signerName);
-        SignerDocumentResponse response = workflowService.getDocumentForSigner(signerName);
+        log.info("GET /api/workflows/{}/signer/{}", workflowId, signerId);
+        SignerDocumentResponse response = workflowService.getDocumentForSigner(workflowId, signerId);
         return ResponseEntity.ok(response);
     }
 

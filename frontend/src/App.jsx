@@ -13,7 +13,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/workflow/new" element={<CreateWorkflow />} />
         </Route>
-        <Route path="/signature/:signerName" element={<SignerPage />} />
+        <Route path="/:workflowId/signature/:signerId" element={<SignerPage />} />
       </Routes>
     </BrowserRouter>
   )

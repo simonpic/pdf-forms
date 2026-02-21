@@ -142,7 +142,7 @@ export default function CreateWorkflow() {
               {result.signers
                 .sort((a, b) => a.order - b.order)
                 .map((signer) => {
-                  const url = `${window.location.origin}/signature/${signer.signerId}`
+                  const url = `${window.location.origin}/${result.workflowId}/signature/${signer.signerId}`
                   return (
                     <div
                       key={signer.signerId}

@@ -28,8 +28,8 @@ export async function createWorkflow(file, data) {
  * Retourne { workflowId, signerName, signerId, pdfBase64, fields }.
  * Lance une erreur avec status=403 si ce n'est pas son tour.
  */
-export async function getSignerDocument(signerName) {
-  const res = await fetch(`${API_BASE}/workflows/signer/${encodeURIComponent(signerName)}`)
+export async function getSignerDocument(workflowId, signerId) {
+  const res = await fetch(`${API_BASE}/workflows/${workflowId}/signer/${encodeURIComponent(signerId)}`)
 
   if (!res.ok) {
     const text = await res.text()

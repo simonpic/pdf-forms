@@ -8,16 +8,16 @@ import { AlertTriangle, Loader2, FileText } from 'lucide-react'
 
 /**
  * Page de signature pour un signataire.
- * URL : /signature/:signerName
+ * URL : /:workflowId/signature/:signerId
  *
  * Flux :
- * 1. GET /api/workflows/signer/:signerName
+ * 1. GET /api/workflows/:workflowId/signer/:signerId
  * 2. Si 403 → affiche message d'erreur
  * 3. Si ok → affiche PDF aplati + inputs pour les champs du signataire
  * 4. Signer POST /fill puis POST /sign
  */
 export default function SignerPage() {
-  const { signerName } = useParams()
+  const { workflowId, signerId } = useParams()
 
   const [status, setStatus] = useState('loading') // 'loading' | 'error' | 'ready'
   const [errorMessage, setErrorMessage] = useState('')
@@ -38,7 +38,7 @@ export default function SignerPage() {
       setErrorMessage('')
 
       try {
-        const data = await getSignerDocument(signerName)
+        const data = await getSignerDocument(workflowId, signerId)
         if (cancelled) return
 
         setDocData(data)
@@ -60,7 +60,7 @@ export default function SignerPage() {
 
     load()
     return () => { cancelled = true }
-  }, [signerName])
+  }, [workflowId, signerId])
 
   // -------------------------------------------------------------------------
   // Gestion des champs
@@ -76,13 +76,13 @@ export default function SignerPage() {
 
   const handleFill = useCallback(async () => {
     if (!docData) return
-    await fillFields(docData.workflowId, signerName, fieldValues)
-  }, [docData, signerName, fieldValues])
+    await fillFields(docData.workflowId, docData.signerName, fieldValues)
+  }, [docData, fieldValues])
 
   const handleSign = useCallback(async () => {
     if (!docData) return
-    await signDocument(docData.workflowId, signerName)
-  }, [docData, signerName])
+    await signDocument(docData.workflowId, docData.signerName)
+  }, [docData])
 
   // -------------------------------------------------------------------------
   // Rendu — Chargement
@@ -128,7 +128,7 @@ export default function SignerPage() {
 
           {isForbidden && (
             <p className="text-xs text-gray-400">
-              Signataire : <span className="font-mono">{signerName}</span>
+              Signataire : <span className="font-mono">{signerId}</span>
             </p>
           )}
         </div>
@@ -199,7 +199,7 @@ export default function SignerPage() {
           <SignaturePanel
             fields={fields}
             values={fieldValues}
-            signerName={docData?.signerName ?? signerName}
+            signerName={docData?.signerName ?? signerId}
             onFill={handleFill}
             onSign={handleSign}
           />
