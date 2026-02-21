@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { FileText, FolderOpen, Clock, Loader2, CheckCircle2, Download } from 'lucide-react'
-import { Card, CardHeader, CardContent, CardFooter } from '../components/ui/card'
+import { Card, CardHeader, CardFooter, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Progress } from '../components/ui/progress'
@@ -150,28 +150,6 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-      {/* Barre de résumé */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-gray-500">En cours</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{counts.IN_PROGRESS}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-gray-500">Complétés</p>
-            <p className="text-2xl font-bold text-green-600 mt-1">{counts.COMPLETED}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-gray-500">Brouillons</p>
-            <p className="text-2xl font-bold text-gray-600 mt-1">{counts.DRAFT}</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Liste */}
       {sorted.length === 0 ? (
         <EmptyState />
