@@ -5,6 +5,8 @@ import com.pdfforms.dto.DetectedFieldDto;
 import com.pdfforms.dto.FieldRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.cos.COSArray;
+import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -306,7 +308,7 @@ public class PdfBoxService {
     public byte[] signPdf(byte[] masterPdfBytes,
                           PrivateKey privateKey,
                           X509Certificate certificate,
-                          String signerName) throws Exception {
+                          String signerName, boolean first) throws Exception {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
             PDSignature signature = new PDSignature();
             signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
@@ -315,6 +317,22 @@ public class PdfBoxService {
             signature.setReason("Signature %s".formatted(signerName));
             signature.setSignDate(Calendar.getInstance());
 
+            if (first) {
+                // Définir les permissions MDP (P=2 : champs AcroForm modifiables)
+                COSDictionary transformParams = new COSDictionary();
+                transformParams.setItem(COSName.TYPE, COSName.getPDFName("TransformParams"));
+                transformParams.setInt(COSName.P, 2); // <-- ici le niveau de permission
+                transformParams.setName(COSName.V, "1.2");
+
+                COSDictionary reference = new COSDictionary();
+                reference.setItem(COSName.TYPE, COSName.getPDFName("SigRef"));
+                reference.setItem(COSName.getPDFName("TransformMethod"), COSName.getPDFName("DocMDP"));
+                reference.setItem(COSName.getPDFName("TransformParams"), transformParams);
+
+                COSArray referenceArray = new COSArray();
+                referenceArray.add(reference);
+                signature.getCOSObject().setItem(COSName.getPDFName("Reference"), referenceArray);
+            }
 
             SignatureOptions options = new SignatureOptions();
             options.setPreferredSignatureSize(0x2500); // ~9Ko réservé pour la signature

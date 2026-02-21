@@ -351,13 +351,12 @@ public class WorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Document introuvable."));
 
-        // Ajouter le tampon visuel, puis signer de manière incrémentale
-        Calendar signDate = Calendar.getInstance();
         byte[] signedPdf = pdfBoxService.signPdf(
                 document.getMasterPdf(),
                 signingKeyPair.getPrivate(),
                 signingCertificate,
-                signer.getSignerId()
+                signer.getSignerId(),
+                signer.getOrder() == 1
         );
 
         document.setMasterPdf(signedPdf);
@@ -379,7 +378,8 @@ public class WorkflowService {
                     document.getMasterPdf(),
                     signingKeyPair.getPrivate(),
                     signingCertificate,
-                    "platform"
+                    "platform",
+                    false
             );
             document.setMasterPdf(signedPdf);
             documentRepository.save(document);
