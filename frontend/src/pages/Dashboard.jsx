@@ -171,16 +171,6 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-      {/* En-tête */}
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Mes workflows</h1>
-          <p className="text-sm text-slate-400 mt-0.5">
-            {sorted.length} workflow{sorted.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-      </div>
-
       {/* Liste */}
       {sorted.length === 0 ? (
         <EmptyState />

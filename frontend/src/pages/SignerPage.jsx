@@ -4,31 +4,17 @@ import PDFCanvas from '../components/PDFCanvas'
 import FieldOverlay from '../components/FieldOverlay'
 import SignaturePanel from '../components/SignaturePanel'
 import { getSignerDocument, fillFields, signDocument } from '../api/workflowApi'
-import { AlertTriangle, Loader2, FileText } from 'lucide-react'
+import { AlertTriangle, Loader2, FileSignature } from 'lucide-react'
 
-/**
- * Page de signature pour un signataire.
- * URL : /:workflowId/signature/:signerId
- *
- * Flux :
- * 1. GET /api/workflows/:workflowId/signer/:signerId
- * 2. Si 403 → affiche message d'erreur
- * 3. Si ok → affiche PDF aplati + inputs pour les champs du signataire
- * 4. Signer POST /fill puis POST /sign
- */
 export default function SignerPage() {
   const { workflowId, signerId } = useParams()
 
-  const [status, setStatus] = useState('loading') // 'loading' | 'error' | 'ready'
+  const [status, setStatus] = useState('loading')
   const [errorMessage, setErrorMessage] = useState('')
-  const [docData, setDocData] = useState(null)   // { workflowId, signerName, signerId, pdfBase64, fields }
-  const [pdfData, setPdfData] = useState(null)   // ArrayBuffer pour PDF.js
+  const [docData, setDocData] = useState(null)
+  const [pdfData, setPdfData] = useState(null)
   const [pageInfo, setPageInfo] = useState(null)
   const [fieldValues, setFieldValues] = useState({})
-
-  // -------------------------------------------------------------------------
-  // Chargement du document
-  // -------------------------------------------------------------------------
 
   useEffect(() => {
     let cancelled = false
@@ -36,19 +22,13 @@ export default function SignerPage() {
     async function load() {
       setStatus('loading')
       setErrorMessage('')
-
       try {
         const data = await getSignerDocument(workflowId, signerId)
         if (cancelled) return
-
         setDocData(data)
-
-        // Décoder le PDF base64 en ArrayBuffer pour PDF.js
         const binary = atob(data.pdfBase64)
         const bytes = new Uint8Array(binary.length)
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i)
-        }
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
         setPdfData(bytes.buffer)
         setStatus('ready')
       } catch (err) {
@@ -62,17 +42,9 @@ export default function SignerPage() {
     return () => { cancelled = true }
   }, [workflowId, signerId])
 
-  // -------------------------------------------------------------------------
-  // Gestion des champs
-  // -------------------------------------------------------------------------
-
   const handleFieldChange = useCallback((fieldName, value) => {
     setFieldValues((prev) => ({ ...prev, [fieldName]: value }))
   }, [])
-
-  // -------------------------------------------------------------------------
-  // Remplissage et signature
-  // -------------------------------------------------------------------------
 
   const handleFill = useCallback(async () => {
     if (!docData) return
@@ -84,25 +56,21 @@ export default function SignerPage() {
     await signDocument(docData.workflowId, docData.signerName)
   }, [docData])
 
-  // -------------------------------------------------------------------------
-  // Rendu — Chargement
-  // -------------------------------------------------------------------------
-
+  // Chargement
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-gray-500">
-          <Loader2 size={32} className="animate-spin" />
-          <p className="text-sm">Chargement du document…</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
+            <Loader2 size={24} className="animate-spin text-indigo-500" />
+          </div>
+          <p className="text-sm text-slate-500">Chargement du document…</p>
         </div>
       </div>
     )
   }
 
-  // -------------------------------------------------------------------------
-  // Rendu — Erreur (403 ou autre)
-  // -------------------------------------------------------------------------
-
+  // Erreur
   if (status === 'error') {
     const isForbidden =
       errorMessage.includes('votre tour') ||
@@ -111,24 +79,22 @@ export default function SignerPage() {
       errorMessage.includes('attente')
 
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white border border-gray-200 rounded-xl shadow-sm p-8 text-center space-y-4">
-          <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center ${
-            isForbidden ? 'bg-amber-100' : 'bg-red-100'
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-xl shadow-sm p-8 text-center space-y-4">
+          <div className={`mx-auto w-16 h-16 rounded-2xl flex items-center justify-center ${
+            isForbidden ? 'bg-amber-50' : 'bg-red-50'
           }`}>
-            <AlertTriangle size={32} className={isForbidden ? 'text-amber-600' : 'text-red-600'} />
+            <AlertTriangle size={28} className={isForbidden ? 'text-amber-500' : 'text-red-500'} />
           </div>
-
           <div>
-            <h1 className="text-lg font-bold text-gray-900">
+            <h1 className="text-lg font-semibold text-slate-900">
               {isForbidden ? 'Accès non autorisé' : 'Une erreur est survenue'}
             </h1>
-            <p className="text-sm text-gray-600 mt-2">{errorMessage}</p>
+            <p className="text-sm text-slate-500 mt-2">{errorMessage}</p>
           </div>
-
           {isForbidden && (
-            <p className="text-xs text-gray-400">
-              Signataire : <span className="font-mono">{signerId}</span>
+            <p className="text-xs text-slate-400">
+              Signataire : <span className="font-mono text-slate-600">{signerId}</span>
             </p>
           )}
         </div>
@@ -136,40 +102,36 @@ export default function SignerPage() {
     )
   }
 
-  // -------------------------------------------------------------------------
-  // Rendu — Document prêt à signer
-  // -------------------------------------------------------------------------
-
+  // Document prêt
   const fields = docData?.fields ?? []
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <header className="bg-white border-b border-slate-200 px-6 py-3">
         <div className="flex items-center gap-3">
-          <FileText size={20} className="text-blue-600" />
+          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+            <FileSignature size={16} className="text-indigo-500" />
+          </div>
           <div>
-            <h1 className="text-base font-bold text-gray-900">
-              Document à signer
-            </h1>
-            <p className="text-sm text-gray-500">
-              Signataire : <span className="font-medium text-gray-700">{docData?.signerName}</span>
-              {' · '}
-              <span className="font-mono text-xs text-gray-400">{docData?.signerId}</span>
+            <h1 className="text-base font-semibold text-slate-900">Document à signer</h1>
+            <p className="text-sm text-slate-400">
+              Signataire :{' '}
+              <span className="font-medium text-slate-700">{docData?.signerName}</span>
+              <span className="font-mono text-xs text-slate-400 ml-1.5">{docData?.signerId}</span>
             </p>
           </div>
         </div>
       </header>
 
-      <div className="flex gap-0 h-[calc(100vh-73px)]">
-        {/* Zone principale — PDF + champs */}
-        <div className="flex-1 overflow-auto bg-gray-100 flex items-start justify-center p-6">
+      <div className="flex gap-0 h-[calc(100vh-65px)]">
+        {/* Zone principale — PDF */}
+        <div className="flex-1 overflow-auto bg-slate-100 flex items-start justify-center p-6">
           {pdfData ? (
             <div className="flex flex-col items-center gap-3">
-              <p className="text-xs text-gray-500 bg-white px-3 py-1 rounded-full border">
-                Remplissez les champs surlignés en bleu, puis signez.
+              <p className="text-xs text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
+                Remplissez les champs surlignés, puis signez.
               </p>
-
               <PDFCanvas
                 pdfData={pdfData}
                 onPageInfo={setPageInfo}
@@ -187,15 +149,15 @@ export default function SignerPage() {
               />
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-gray-400">
-              <Loader2 size={20} className="animate-spin" />
+            <div className="flex items-center gap-2 text-slate-400">
+              <Loader2 size={20} className="animate-spin text-indigo-400" />
               <span className="text-sm">Chargement du PDF…</span>
             </div>
           )}
         </div>
 
         {/* Panneau droit — signature */}
-        <div className="w-80 bg-white border-l border-gray-200 overflow-y-auto p-4">
+        <div className="w-80 bg-white border-l border-slate-200 overflow-y-auto p-4">
           <SignaturePanel
             fields={fields}
             values={fieldValues}
