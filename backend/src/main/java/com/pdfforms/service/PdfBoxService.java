@@ -164,12 +164,13 @@ public class PdfBoxService {
 
                 if (field instanceof PDTextField textField) {
                     textField.setValue(value);
+                    textField.setReadOnly(true);
                     log.debug("Valeur appliquée : {} = '{}'", fieldName, value);
                 }
             }
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            doc.save(bos);
+            doc.saveIncremental(bos);
             return bos.toByteArray();
         }
     }
