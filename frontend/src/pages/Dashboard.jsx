@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+
 import { format, formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { FileText, FolderOpen, Clock, Loader2, PenLine, CheckCircle2, Download, ExternalLink } from 'lucide-react'
+import { FileText, FolderOpen, Clock, Loader2, PenLine, CheckCircle2, Download, ExternalLink, PlusCircle } from 'lucide-react'
 import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -100,20 +101,13 @@ function WorkflowCard({ workflow }) {
 }
 
 function EmptyState() {
-  const navigate = useNavigate()
   return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
+    <div className="flex flex-col items-center justify-center py-24 text-center">
       <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
         <FolderOpen size={32} className="text-indigo-400" />
       </div>
       <p className="text-slate-600 font-medium mb-1">Aucun workflow pour le moment</p>
-      <p className="text-slate-400 text-sm mb-5">Créez votre premier workflow de signature PDF.</p>
-      <Button
-        className="bg-indigo-500 hover:bg-indigo-600 gap-1.5"
-        onClick={() => navigate('/workflow/new')}
-      >
-        Créer votre premier workflow
-      </Button>
+      <p className="text-slate-400 text-sm">Créez votre premier workflow via le bouton ci-dessus.</p>
     </div>
   )
 }
@@ -121,6 +115,7 @@ function EmptyState() {
 const TAB_ALL = 'all'
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(TAB_ALL)
 
   const { data: workflows = [], isLoading, isError } = useQuery({
@@ -161,6 +156,25 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+      {/* Header de page */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Mes workflows</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
+            {sorted.length === 0
+              ? 'Aucun workflow pour le moment.'
+              : `${sorted.length} workflow${sorted.length > 1 ? 's' : ''}`}
+          </p>
+        </div>
+        <Button
+          className="gap-1.5 bg-indigo-500 hover:bg-indigo-600"
+          onClick={() => navigate('/workflow/new')}
+        >
+          <PlusCircle size={16} />
+          Nouveau workflow
+        </Button>
+      </div>
+
       {sorted.length === 0 ? (
         <EmptyState />
       ) : (
