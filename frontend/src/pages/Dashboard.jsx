@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { format, formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { FileText, FolderOpen, Clock, Loader2, PenLine, CheckCircle2, Download, Copy, Check } from 'lucide-react'
+import { FileText, FolderOpen, Clock, Loader2, PenLine, CheckCircle2, Download, ExternalLink } from 'lucide-react'
 import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -37,18 +37,8 @@ function formatRelative(iso) {
 }
 
 function WorkflowCard({ workflow }) {
-  const [copiedId, setCopiedId] = useState(null)
-
   const createdStr  = formatDate(workflow.createdAt)
   const showUpdated = workflow.createdAt !== workflow.updatedAt
-
-  const copyLink = (signerId) => {
-    const url = `${window.location.origin}/${workflow.id}/signature/${signerId}`
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedId(signerId)
-      setTimeout(() => setCopiedId(null), 2000)
-    })
-  }
 
   return (
     <Card className={`p-3 space-y-2 border-l-4 ${STATUS_BORDER[workflow.status]}`}>
@@ -92,19 +82,15 @@ function WorkflowCard({ workflow }) {
               {SIGNER_ICON[signer.status]}
               <span className="text-slate-700 truncate flex-1">{signer.name}</span>
               {signer.status === 'IN_PROGRESS' && (
-                <button
-                  onClick={() => copyLink(signer.signerId)}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors shrink-0 ${
-                    copiedId === signer.signerId
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                  }`}
+                <a
+                  href={`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors shrink-0"
                 >
-                  {copiedId === signer.signerId
-                    ? <><Check size={11} /> Copié !</>
-                    : <><Copy size={11} /> Copier le lien</>
-                  }
-                </button>
+                  <ExternalLink size={11} />
+                  Ouvrir
+                </a>
               )}
             </div>
           ))}
