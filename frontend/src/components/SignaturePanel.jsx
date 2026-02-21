@@ -84,7 +84,7 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
             </div>
           </div>
           <p className="text-xs text-emerald-700 bg-emerald-100 rounded-md px-3 py-2 leading-relaxed">
-            Le prochain signataire sera notifié automatiquement. Vous pouvez fermer cette page.
+            Vous pouvez fermer cette page.
           </p>
         </CardContent>
       </Card>
