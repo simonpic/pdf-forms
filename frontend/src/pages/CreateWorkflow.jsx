@@ -11,7 +11,7 @@ import { Label } from '../components/ui/label'
 import { Card, CardContent } from '../components/ui/card'
 import { Tooltip } from '../components/ui/tooltip'
 import { createWorkflow } from '../api/workflowApi'
-import { Upload, FileText, Type, SquareCheck, CircleDot } from 'lucide-react'
+import { Upload, FileText, Type, SquareCheck, CircleDot, CheckCircle2, Circle } from 'lucide-react'
 
 const TOOLS = [
   { id: 'text',     label: 'Texte',  Icon: Type,        hint: 'Cliquez-glissez sur le PDF pour dessiner un champ texte.' },
@@ -70,7 +70,6 @@ export default function CreateWorkflow() {
     if (!pdfFile) return alert('Veuillez uploader un PDF.')
     if (!workflowName.trim()) return alert('Veuillez nommer le workflow.')
     if (signers.length === 0) return alert('Ajoutez au moins un signataire.')
-    if (fields.length === 0) return alert('Dessinez au moins un champ.')
 
     setSubmitting(true)
     setError(null)
@@ -141,21 +140,31 @@ export default function CreateWorkflow() {
         {/* Sidebar verticale — outils de champ (visible uniquement avec un PDF chargé) */}
         {pdfData && (
           <div className="w-12 bg-white border-r border-slate-200 flex flex-col items-center pt-4 pb-3 gap-1 shrink-0">
-            {TOOLS.map(({ id, label, Icon, hint }) => (
-              <Tooltip key={id} content={hint} side="right">
-                <button
-                  aria-label={label}
-                  onClick={() => setActiveTool(id)}
-                  className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
-                    activeTool === id
-                      ? 'bg-indigo-500 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                  }`}
+            {TOOLS.map(({ id, label, Icon, hint }) => {
+              const noSigners = signers.length === 0
+              return (
+                <Tooltip
+                  key={id}
+                  content={noSigners ? 'Ajoutez un signataire avant de placer des champs.' : hint}
+                  side="right"
                 >
-                  <Icon size={16} />
-                </button>
-              </Tooltip>
-            ))}
+                  <button
+                    aria-label={label}
+                    disabled={noSigners}
+                    onClick={() => !noSigners && setActiveTool(id)}
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                      noSigners
+                        ? 'text-slate-200 cursor-not-allowed'
+                        : activeTool === id
+                          ? 'bg-indigo-500 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Icon size={16} />
+                  </button>
+                </Tooltip>
+              )
+            })}
           </div>
         )}
 
@@ -239,12 +248,38 @@ export default function CreateWorkflow() {
           </div>
 
           {/* Footer fixe — bouton de soumission */}
-          <div className="border-t border-slate-200 p-4 space-y-2">
+          <div className="border-t border-slate-200 p-4 space-y-3">
+            {/* Checklist de prérequis */}
+            {(() => {
+              const prereqs = [
+                { label: 'PDF chargé',            done: !!pdfFile },
+                { label: 'Nom du workflow',        done: !!workflowName.trim() },
+                { label: 'Au moins un signataire', done: signers.length > 0 },
+              ]
+              const allDone = prereqs.every((p) => p.done)
+              if (allDone) return null
+              return (
+                <ul className="space-y-1">
+                  {prereqs.map(({ label, done }) => (
+                    <li key={label} className="flex items-center gap-2">
+                      {done
+                        ? <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                        : <Circle       size={13} className="text-slate-300 shrink-0" />
+                      }
+                      <span className={`text-xs ${done ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
+                        {label}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )
+            })()}
+
             <Button
               className="w-full bg-indigo-500 hover:bg-indigo-600"
               disabled={
                 submitting || !pdfFile || !workflowName.trim() ||
-                signers.length === 0 || fields.length === 0
+                signers.length === 0
               }
               onClick={handleSubmit}
             >

@@ -85,7 +85,6 @@ export default function SignerList({ signers, onChange }) {
             />
             <Button
               variant="outline"
-              size="sm"
               onClick={handleAdd}
               disabled={!newName.trim()}
               className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
