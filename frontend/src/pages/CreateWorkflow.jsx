@@ -174,16 +174,55 @@ export default function CreateWorkflow() {
     <div>
       {/* Sous-header de la page */}
       <header className="bg-white border-b border-slate-200 px-6 py-3">
-        <h1 className="text-base font-semibold text-slate-900">
-          Nouveau workflow de signature
-        </h1>
-        <p className="text-sm text-slate-400">
-          Uploadez un PDF, dessinez les champs et assignez-les aux signataires.
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-base font-semibold text-slate-900">
+              Nouveau workflow de signature
+            </h1>
+            <p className="text-sm text-slate-400">
+              Uploadez un PDF, dessinez les champs et assignez-les aux signataires.
+            </p>
+          </div>
+
+          {/* Nom du fichier chargé */}
+          {pdfData && (
+            <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 shrink-0">
+              <FileText size={14} className="text-indigo-500 shrink-0" />
+              <span className="font-medium max-w-56 truncate">{pdfFile?.name}</span>
+              <button
+                onClick={() => { setPdfFile(null); setPdfData(null); setFields([]) }}
+                className="text-slate-400 hover:text-red-500 ml-1 shrink-0"
+                title="Retirer le PDF"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
-      <div className="flex gap-0 h-[calc(100vh-121px)]">
-        {/* Panneau gauche — canvas PDF */}
+      <div className="flex h-[calc(100vh-121px)]">
+        {/* Sidebar verticale — outils de champ (visible uniquement avec un PDF chargé) */}
+        {pdfData && (
+          <div className="w-12 bg-white border-r border-slate-200 flex flex-col items-center pt-4 pb-3 gap-1 shrink-0">
+            {TOOLS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                title={label}
+                onClick={() => setActiveTool(id)}
+                className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
+                  activeTool === id
+                    ? 'bg-indigo-500 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Icon size={16} />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Zone canvas PDF */}
         <div className="flex-1 overflow-auto bg-slate-100 flex items-start justify-center p-6">
           {!pdfData ? (
             <div
@@ -211,36 +250,6 @@ export default function CreateWorkflow() {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3">
-              {/* Fichier chargé */}
-              <div className="flex items-center gap-2 text-sm text-slate-600 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-                <FileText size={14} className="text-indigo-500" />
-                <span className="font-medium">{pdfFile?.name}</span>
-                <button
-                  onClick={() => { setPdfFile(null); setPdfData(null); setFields([]) }}
-                  className="text-slate-400 hover:text-red-500 ml-1"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Toolbar de sélection du type de champ */}
-              <div className="flex items-center gap-1 bg-white rounded-full border border-slate-200 shadow-sm px-1.5 py-1">
-                {TOOLS.map(({ id, label, Icon }) => (
-                  <button
-                    key={id}
-                    onClick={() => setActiveTool(id)}
-                    className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                      activeTool === id
-                        ? 'bg-indigo-500 text-white shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Icon size={13} />
-                    {label}
-                  </button>
-                ))}
-              </div>
-
               <PDFCanvas
                 pdfData={pdfData}
                 onPageInfo={setPageInfo}
@@ -257,7 +266,6 @@ export default function CreateWorkflow() {
                   ) : null
                 }
               />
-
               {!pageInfo && (
                 <p className="text-xs text-slate-400">Chargement du PDF…</p>
               )}
