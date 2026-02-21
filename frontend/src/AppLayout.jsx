@@ -1,29 +1,40 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, PlusCircle } from 'lucide-react'
+import { LayoutDashboard, PlusCircle, FileSignature } from 'lucide-react'
 import { Button } from './components/ui/button'
 
 export default function AppLayout() {
   const navigate = useNavigate()
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-white border-b border-gray-200 flex items-center px-6 gap-4">
-        <span className="font-semibold text-gray-900 mr-auto">PDF Workflow</span>
+    <div className="min-h-screen bg-slate-50">
+      <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-slate-900 flex items-center px-6 gap-4">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 mr-auto">
+          <div className="w-7 h-7 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+            <FileSignature size={14} className="text-white" />
+          </div>
+          <span className="font-semibold text-white tracking-tight">PDF Workflow</span>
+        </div>
+
         <nav className="flex items-center gap-2">
           <NavLink
             to="/dashboard"
             className={({ isActive }) =>
               `flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
                 isActive
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`
             }
           >
             <LayoutDashboard size={16} />
             Dashboard
           </NavLink>
-          <Button size="sm" className="gap-1.5" onClick={() => navigate('/workflow/new')}>
+          <Button
+            size="sm"
+            className="gap-1.5 bg-indigo-500 hover:bg-indigo-600"
+            onClick={() => navigate('/workflow/new')}
+          >
             <PlusCircle size={16} />
             Nouveau workflow
           </Button>

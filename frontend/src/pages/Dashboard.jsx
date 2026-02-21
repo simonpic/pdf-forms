@@ -12,15 +12,27 @@ import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { fetchWorkflows, downloadWorkflowPdf } from '../api/workflows'
 
 const STATUS_BADGE = {
-  DRAFT: <Badge variant="secondary">Brouillon</Badge>,
+  DRAFT: <Badge className="bg-slate-100 text-slate-600">Brouillon</Badge>,
   IN_PROGRESS: <Badge className="bg-amber-100 text-amber-700">En cours</Badge>,
-  COMPLETED: <Badge className="bg-green-100 text-green-700">Complété</Badge>,
+  COMPLETED: <Badge className="bg-emerald-100 text-emerald-700">Complété</Badge>,
+}
+
+const STATUS_BORDER = {
+  DRAFT: 'border-l-slate-300',
+  IN_PROGRESS: 'border-l-amber-400',
+  COMPLETED: 'border-l-emerald-400',
+}
+
+const PROGRESS_COLOR = {
+  DRAFT: 'bg-slate-400',
+  IN_PROGRESS: 'bg-amber-400',
+  COMPLETED: 'bg-emerald-500',
 }
 
 const SIGNER_ICON = {
-  PENDING: <Clock size={14} className="text-gray-400 shrink-0" />,
-  IN_PROGRESS: <Loader2 size={14} className="text-amber-500 animate-spin shrink-0" />,
-  SIGNED: <CheckCircle2 size={14} className="text-green-500 shrink-0" />,
+  PENDING: <Clock size={13} className="text-slate-300 shrink-0" />,
+  IN_PROGRESS: <Loader2 size={13} className="text-amber-500 animate-spin shrink-0" />,
+  SIGNED: <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />,
 }
 
 function formatDate(iso) {
@@ -36,16 +48,16 @@ function WorkflowCard({ workflow }) {
   const showUpdated = createdStr !== updatedStr
 
   return (
-    <Card className="p-3 space-y-2">
+    <Card className={`p-3 space-y-2 border-l-4 ${STATUS_BORDER[workflow.status]}`}>
       {/* Ligne 1 : nom + badge + bouton télécharger */}
       <div className="flex items-center gap-2">
-        <p className="font-medium text-sm text-gray-900 truncate flex-1">{workflow.name}</p>
+        <p className="font-medium text-sm text-slate-900 truncate flex-1">{workflow.name}</p>
         {STATUS_BADGE[workflow.status]}
         {workflow.status === 'COMPLETED' && (
           <Button
             size="sm"
             variant="outline"
-            className="gap-1 h-6 px-2 text-xs shrink-0"
+            className="gap-1 h-6 px-2 text-xs shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
             onClick={() => downloadWorkflowPdf(workflow.id, `${workflow.name}-signé.pdf`)}
           >
             <Download size={12} />
@@ -55,7 +67,7 @@ function WorkflowCard({ workflow }) {
       </div>
 
       {/* Ligne 2 : fichier + dates */}
-      <div className="flex items-center gap-3 text-xs text-gray-400 min-w-0">
+      <div className="flex items-center gap-3 text-xs text-slate-400 min-w-0">
         <span className="flex items-center gap-1 truncate">
           <FileText size={11} className="shrink-0" />
           {workflow.pdfOriginalName}
@@ -67,8 +79,8 @@ function WorkflowCard({ workflow }) {
 
       {/* Ligne 3 : barre de progression */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-500 shrink-0">{signedCount}/{totalCount} signatures</span>
-        <Progress value={progress} className="flex-1" />
+        <span className="text-xs text-slate-500 shrink-0">{signedCount}/{totalCount} signatures</span>
+        <Progress value={progress} className="flex-1" indicatorClassName={PROGRESS_COLOR[workflow.status]} />
       </div>
 
       {/* Signataires */}
@@ -78,14 +90,14 @@ function WorkflowCard({ workflow }) {
           .map((signer) => (
             <div key={signer.order} className="flex items-center gap-1.5 text-xs">
               {SIGNER_ICON[signer.status]}
-              <span className="text-gray-400 shrink-0">#{signer.order}</span>
-              <span className="text-gray-700 truncate">{signer.name}</span>
+              <span className="text-slate-400 shrink-0">#{signer.order}</span>
+              <span className="text-slate-700 truncate">{signer.name}</span>
               {signer.status === 'IN_PROGRESS' && (
                 <a
                   href={`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-blue-500 hover:text-blue-700 hover:underline truncate"
+                  className="text-indigo-500 hover:text-indigo-700 hover:underline truncate"
                 >
                   {`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
                 </a>
@@ -101,9 +113,15 @@ function EmptyState() {
   const navigate = useNavigate()
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <FolderOpen size={48} className="text-gray-300 mb-4" />
-      <p className="text-gray-500 mb-4">Aucun workflow pour le moment</p>
-      <Button onClick={() => navigate('/workflow/new')}>
+      <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
+        <FolderOpen size={32} className="text-indigo-400" />
+      </div>
+      <p className="text-slate-600 font-medium mb-1">Aucun workflow pour le moment</p>
+      <p className="text-slate-400 text-sm mb-5">Créez votre premier workflow de signature PDF.</p>
+      <Button
+        className="bg-indigo-500 hover:bg-indigo-600 gap-1.5"
+        onClick={() => navigate('/workflow/new')}
+      >
         Créer votre premier workflow
       </Button>
     </div>
@@ -119,6 +137,7 @@ export default function Dashboard() {
     queryKey: ['workflows'],
     queryFn: fetchWorkflows,
     staleTime: 5_000,
+    refetchOnWindowFocus: true,
   })
 
   const sorted = [...workflows].sort(
@@ -137,7 +156,7 @@ export default function Dashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 size={32} className="animate-spin text-gray-400" />
+        <Loader2 size={28} className="animate-spin text-indigo-400" />
       </div>
     )
   }
@@ -152,6 +171,16 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+      {/* En-tête */}
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Mes workflows</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
+            {sorted.length} workflow{sorted.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+      </div>
+
       {/* Liste */}
       {sorted.length === 0 ? (
         <EmptyState />
@@ -171,11 +200,11 @@ export default function Dashboard() {
           </Tabs>
 
           {filtered.length === 0 ? (
-            <p className="text-center text-gray-400 py-12 text-sm">
+            <p className="text-center text-slate-400 py-12 text-sm">
               Aucun workflow dans cette catégorie.
             </p>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               {filtered.map((w) => (
                 <WorkflowCard key={w.id} workflow={w} />
               ))}
