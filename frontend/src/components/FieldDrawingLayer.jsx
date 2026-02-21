@@ -36,6 +36,7 @@ export default function FieldDrawingLayer({
   signers,
   fields,
   onFieldAdded,
+  onFieldReassigned,
   activeTool = 'text',
 }) {
   const [drawing, setDrawing] = useState(false)
@@ -44,6 +45,8 @@ export default function FieldDrawingLayer({
   const [pendingRect, setPendingRect] = useState(null)
   const [showPopup, setShowPopup] = useState(false)
   const [radioGroupName, setRadioGroupName] = useState('groupe_1')
+  const [hoveredFieldIndex, setHoveredFieldIndex] = useState(-1)
+  const [reassigningFieldIndex, setReassigningFieldIndex] = useState(null)
   const layerRef = useRef(null)
 
   // Réinitialise l'état de dessin quand l'outil change
@@ -64,23 +67,40 @@ export default function FieldDrawingLayer({
     if (showPopup) return
     e.preventDefault()
     const pos = getRelativePos(e)
+
+    // Clic sur un champ existant → mode réassignation
+    const hitIndex = getFieldAtPos(fields, pos)
+    if (hitIndex !== -1) {
+      const field = fields[hitIndex]
+      setReassigningFieldIndex(hitIndex)
+      setPendingRect(field.canvasRect)
+      if (field.fieldType === 'radio') setRadioGroupName(field.groupName || 'groupe_1')
+      setShowPopup(true)
+      return
+    }
+
     setStartPos(pos)
     if (activeTool === 'text') {
       setDrawing(true)
       setCurrentRect(null)
     }
-  }, [showPopup, activeTool])
+  }, [showPopup, activeTool, fields])
 
   const handleMouseMove = useCallback((e) => {
-    if (!drawing || !startPos || activeTool !== 'text') return
     const pos = getRelativePos(e)
+
+    if (!drawing && !showPopup) {
+      setHoveredFieldIndex(getFieldAtPos(fields, pos))
+    }
+
+    if (!drawing || !startPos || activeTool !== 'text') return
     setCurrentRect({
       x: Math.min(startPos.x, pos.x),
       y: Math.min(startPos.y, pos.y),
       width: Math.abs(pos.x - startPos.x),
       height: Math.abs(pos.y - startPos.y),
     })
-  }, [drawing, startPos, activeTool])
+  }, [drawing, startPos, activeTool, fields, showPopup])
 
   const handleMouseUp = useCallback(() => {
     if (!startPos) return
@@ -117,29 +137,42 @@ export default function FieldDrawingLayer({
   }, [startPos, activeTool, currentRect, fields])
 
   const handleAssign = (signer, index) => {
-    if (!pendingRect || !scale || !pageHeightPt) return
+    if (reassigningFieldIndex !== null) {
+      // Mode réassignation : on met à jour le champ existant
+      const fieldType = fields[reassigningFieldIndex].fieldType
+      onFieldReassigned(reassigningFieldIndex, {
+        assignedTo: signer ? signer.signerId : '',
+        signerName: signer ? signer.name : null,
+        signerIndex: signer ? index : -1,
+        ...(fieldType === 'radio' ? { groupName: radioGroupName.trim() || 'groupe_1' } : {}),
+      })
+      setReassigningFieldIndex(null)
+    } else {
+      // Mode placement : on crée un nouveau champ
+      if (!pendingRect || !scale || !pageHeightPt) return
 
-    const pdfX = pendingRect.x / scale
-    const pdfY = pageHeightPt - (pendingRect.y + pendingRect.height) / scale
-    const pdfWidth = pendingRect.width / scale
-    const pdfHeight = pendingRect.height / scale
+      const pdfX = pendingRect.x / scale
+      const pdfY = pageHeightPt - (pendingRect.y + pendingRect.height) / scale
+      const pdfWidth = pendingRect.width / scale
+      const pdfHeight = pendingRect.height / scale
 
-    const field = {
-      fieldType: activeTool,
-      fieldName: `${activeTool}_${signer ? signer.signerId : 'unassigned'}_${Date.now()}`,
-      assignedTo: signer ? signer.signerId : '',
-      signerName: signer ? signer.name : null,
-      signerIndex: signer ? index : -1,
-      page: 0,
-      x: Math.round(pdfX * 100) / 100,
-      y: Math.round(pdfY * 100) / 100,
-      width: Math.round(pdfWidth * 100) / 100,
-      height: Math.round(pdfHeight * 100) / 100,
-      canvasRect: pendingRect,
-      ...(activeTool === 'radio' ? { groupName: radioGroupName.trim() || 'groupe_1' } : {}),
+      const field = {
+        fieldType: activeTool,
+        fieldName: `${activeTool}_${signer ? signer.signerId : 'unassigned'}_${Date.now()}`,
+        assignedTo: signer ? signer.signerId : '',
+        signerName: signer ? signer.name : null,
+        signerIndex: signer ? index : -1,
+        page: 0,
+        x: Math.round(pdfX * 100) / 100,
+        y: Math.round(pdfY * 100) / 100,
+        width: Math.round(pdfWidth * 100) / 100,
+        height: Math.round(pdfHeight * 100) / 100,
+        canvasRect: pendingRect,
+        ...(activeTool === 'radio' ? { groupName: radioGroupName.trim() || 'groupe_1' } : {}),
+      }
+      onFieldAdded(field)
     }
 
-    onFieldAdded(field)
     setShowPopup(false)
     setPendingRect(null)
     setCurrentRect(null)
@@ -151,6 +184,7 @@ export default function FieldDrawingLayer({
     setPendingRect(null)
     setCurrentRect(null)
     setStartPos(null)
+    setReassigningFieldIndex(null)
   }
 
   const handleNewRadioGroup = () => {
@@ -168,11 +202,16 @@ export default function FieldDrawingLayer({
   return (
     <div
       ref={layerRef}
-      className={`absolute inset-0 ${showPopup ? 'cursor-default' : 'cursor-crosshair'}`}
+      className={`absolute inset-0 ${
+        showPopup          ? 'cursor-default'
+        : hoveredFieldIndex !== -1 ? 'cursor-pointer'
+        : 'cursor-crosshair'
+      }`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={() => {
+        setHoveredFieldIndex(-1)
         if (drawing) {
           setDrawing(false)
           setCurrentRect(null)
@@ -284,7 +323,9 @@ export default function FieldDrawingLayer({
           </button>
 
           {/* Section groupe radio */}
-          {activeTool === 'radio' && (
+          {(reassigningFieldIndex !== null
+            ? fields[reassigningFieldIndex]?.fieldType === 'radio'
+            : activeTool === 'radio') && (
             <div className="mt-2 pt-2 border-t border-gray-100">
               <p className="text-xs font-semibold text-gray-700 mb-1.5">Groupe radio :</p>
 
@@ -336,6 +377,19 @@ export default function FieldDrawingLayer({
       )}
     </div>
   )
+}
+
+function getFieldAtPos(fields, pos) {
+  for (let i = fields.length - 1; i >= 0; i--) {
+    const { canvasRect } = fields[i]
+    if (
+      pos.x >= canvasRect.x &&
+      pos.x <= canvasRect.x + canvasRect.width &&
+      pos.y >= canvasRect.y &&
+      pos.y <= canvasRect.y + canvasRect.height
+    ) return i
+  }
+  return -1
 }
 
 function getExistingRadioGroups(fields) {
