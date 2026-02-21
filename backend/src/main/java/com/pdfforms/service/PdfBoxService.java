@@ -293,18 +293,18 @@ public class PdfBoxService {
     }
 
     /**
-     * Ajoute un tampon visuel de signature sur la dernière page du PDF.
-     * Le tampon affiche le nom du signataire et la date de signature.
+     * Ajoute une page de signature dédiée à la fin du PDF.
+     * La page affiche le nom du signataire et la date de signature.
      * Les accents sont normalisés pour la compatibilité avec les polices Type1.
+     * Utilise doc.save() (sauvegarde complète) pour garantir l'inclusion de la nouvelle page.
      *
-     * @param pdfBytes       bytes du PDF à modifier
-     * @param signerName     nom affiché dans le tampon
-     * @param signDate       date de signature
-     * @return bytes du PDF avec le tampon ajouté
+     * @param pdfBytes   bytes du PDF à modifier
+     * @param signerName nom du signataire
+     * @param signDate   date de signature
+     * @return bytes du PDF avec la page de signature ajoutée
      */
     public byte[] addSignatureStamp(byte[] pdfBytes, String signerName, Calendar signDate) throws IOException {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(pdfBytes))) {
-            PDPage lastPage = doc.getPage(doc.getNumberOfPages() - 1);
 
             PDType1Font font     = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
             PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
@@ -315,41 +315,51 @@ public class PdfBoxService {
             String dateStr = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE)
                     .format(signDate.getTime());
 
-            float stampX = 30;
-            float stampY = 30;
-            float stampW = 185;
-            float stampH = 38;
+            // Ajouter une nouvelle page dédiée à la signature
+            PDPage sigPage = new PDPage(PDRectangle.A4);
+            doc.addPage(sigPage);
 
-            try (PDPageContentStream cs = new PDPageContentStream(
-                    doc, lastPage, PDPageContentStream.AppendMode.APPEND, true, true)) {
+            float pageW = sigPage.getMediaBox().getWidth();   // 595 pt
+            float pageH = sigPage.getMediaBox().getHeight();  // 842 pt
 
-                // Fond du tampon
-                cs.setNonStrokingColor(0.94f, 0.96f, 1.0f);
-                cs.addRect(stampX, stampY, stampW, stampH);
-                cs.fill();
+            try (PDPageContentStream cs = new PDPageContentStream(doc, sigPage)) {
 
-                // Bordure
+                // Titre
+                cs.setFont(fontBold, 16);
+                cs.setNonStrokingColor(0.15f, 0.25f, 0.55f);
+                cs.beginText();
+                cs.newLineAtOffset(50, pageH - 80);
+                cs.showText("Signature electronique");
+                cs.endText();
+
+                // Ligne séparatrice
                 cs.setStrokingColor(0.6f, 0.7f, 0.9f);
-                cs.setLineWidth(0.5f);
-                cs.addRect(stampX, stampY, stampW, stampH);
+                cs.setLineWidth(1f);
+                cs.moveTo(50, pageH - 100);
+                cs.lineTo(pageW - 50, pageH - 100);
                 cs.stroke();
 
-                // Texte
+                // Nom du signataire
+                cs.setFont(fontBold, 12);
+                cs.setNonStrokingColor(0.1f, 0.1f, 0.1f);
                 cs.beginText();
-                cs.setFont(fontBold, 7.5f);
-                cs.setNonStrokingColor(0.2f, 0.3f, 0.6f);
-                cs.newLineAtOffset(stampX + 7, stampY + stampH - 15);
+                cs.newLineAtOffset(50, pageH - 140);
                 cs.showText("Signe par : " + displayName);
-                cs.setFont(font, 7f);
-                cs.setNonStrokingColor(0.3f, 0.3f, 0.4f);
-                cs.newLineAtOffset(0, -14);
+                cs.endText();
+
+                // Date
+                cs.setFont(font, 11);
+                cs.setNonStrokingColor(0.35f, 0.35f, 0.35f);
+                cs.beginText();
+                cs.newLineAtOffset(50, pageH - 165);
                 cs.showText("Date : " + dateStr);
                 cs.endText();
             }
 
+            // Sauvegarde complète (non incrémentale) pour garantir l'inclusion de la nouvelle page
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             doc.save(bos);
-            log.debug("Tampon visuel ajouté pour '{}' ({}).", displayName, dateStr);
+            log.info("Page de signature ajoutee pour '{}' ({}).", displayName, dateStr);
             return bos.toByteArray();
         }
     }
