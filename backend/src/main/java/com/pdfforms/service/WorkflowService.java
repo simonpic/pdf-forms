@@ -33,6 +33,21 @@ public class WorkflowService {
     // -------------------------------------------------------------------------
 
     /**
+     * Convertit un nom en slug URL-safe.
+     * Ex : "Jean Dupont" → "jean-dupont", "Signataire A" → "signataire-a"
+     */
+    public static String slugify(String name) {
+        if (name == null || name.isBlank()) return "";
+        // Normaliser les caractères accentués
+        String normalized = Normalizer.normalize(name, Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return normalized
+                .toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+    }
+
+    /**
      * Crée un nouveau workflow :
      * 1. Slugifie les noms des signataires
      * 2. Génère le PDF master avec les champs AcroForm
@@ -77,9 +92,13 @@ public class WorkflowService {
                 .build();
     }
 
+    // -------------------------------------------------------------------------
+    // Récupération du document pour un signataire
+    // -------------------------------------------------------------------------
+
     public WorkflowCreateResponse createWorkflow(byte[] originalPdfBytes,
-                                                  WorkflowCreateRequest request,
-                                                  String pdfOriginalName) throws Exception {
+                                                 WorkflowCreateRequest request,
+                                                 String pdfOriginalName) throws Exception {
         log.info("Création du workflow '{}' avec {} signataires et {} champs.",
                 request.getName(), request.getSigners().size(), request.getFields().size());
 
@@ -156,7 +175,7 @@ public class WorkflowService {
     }
 
     // -------------------------------------------------------------------------
-    // Récupération du document pour un signataire
+    // Remplissage des champs
     // -------------------------------------------------------------------------
 
     /**
@@ -225,7 +244,7 @@ public class WorkflowService {
     }
 
     // -------------------------------------------------------------------------
-    // Remplissage des champs
+    // Signature
     // -------------------------------------------------------------------------
 
     /**
@@ -272,7 +291,7 @@ public class WorkflowService {
     }
 
     // -------------------------------------------------------------------------
-    // Signature
+    // Téléchargement du PDF final
     // -------------------------------------------------------------------------
 
     /**
@@ -312,7 +331,8 @@ public class WorkflowService {
         byte[] signedPdf = pdfBoxService.signPdf(
                 document.getMasterPdf(),
                 signingKeyPair.getPrivate(),
-                signingCertificate
+                signingCertificate,
+                signer.getSignerId()
         );
 
         document.setMasterPdf(signedPdf);
@@ -329,7 +349,15 @@ public class WorkflowService {
 
         if (isLast) {
             workflow.setStatus(WorkflowStatus.COMPLETED);
-            workflow.setCurrentSignerOrder(nextOrder); // au-delà du dernier
+            workflow.setCurrentSignerOrder(nextOrder);
+            signedPdf = pdfBoxService.signPdf(
+                    document.getMasterPdf(),
+                    signingKeyPair.getPrivate(),
+                    signingCertificate,
+                    "platform"
+            );
+            document.setMasterPdf(signedPdf);
+            documentRepository.save(document);
             log.info("Workflow {} COMPLETED après signature de '{}'.", workflowId, signerId);
         } else {
             workflow.setCurrentSignerOrder(nextOrder);
@@ -347,7 +375,7 @@ public class WorkflowService {
     }
 
     // -------------------------------------------------------------------------
-    // Téléchargement du PDF final
+    // Utilitaire de slugification
     // -------------------------------------------------------------------------
 
     /**
@@ -368,24 +396,5 @@ public class WorkflowService {
                         "Document introuvable."));
 
         return document.getMasterPdf();
-    }
-
-    // -------------------------------------------------------------------------
-    // Utilitaire de slugification
-    // -------------------------------------------------------------------------
-
-    /**
-     * Convertit un nom en slug URL-safe.
-     * Ex : "Jean Dupont" → "jean-dupont", "Signataire A" → "signataire-a"
-     */
-    public static String slugify(String name) {
-        if (name == null || name.isBlank()) return "";
-        // Normaliser les caractères accentués
-        String normalized = Normalizer.normalize(name, Normalizer.Form.NFD)
-                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
-        return normalized
-                .toLowerCase()
-                .replaceAll("[^a-z0-9]+", "-")
-                .replaceAll("^-+|-+$", "");
     }
 }

@@ -12,17 +12,19 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
+import org.apache.pdfbox.pdmodel.interactive.digitalsignature.SignatureOptions;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import org.apache.pdfbox.pdmodel.interactive.form.PDField;
 import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
-import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
-import org.apache.pdfbox.pdmodel.interactive.digitalsignature.SignatureOptions;
 import org.bouncycastle.cert.jcajce.JcaCertStore;
-import org.bouncycastle.cms.*;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
+import org.bouncycastle.cms.CMSProcessableByteArray;
+import org.bouncycastle.cms.CMSSignedData;
+import org.bouncycastle.cms.CMSSignedDataGenerator;
 import org.bouncycastle.cms.jcajce.JcaSignerInfoGeneratorBuilder;
 import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -186,14 +188,14 @@ public class PdfBoxService {
      */
     public byte[] signPdf(byte[] masterPdfBytes,
                           PrivateKey privateKey,
-                          X509Certificate certificate) throws Exception {
+                          X509Certificate certificate,
+                          String signerName) throws Exception {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
-
             PDSignature signature = new PDSignature();
             signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
             signature.setSubFilter(PDSignature.SUBFILTER_ADBE_PKCS7_DETACHED);
-            signature.setName("PDF Forms POC");
-            signature.setReason("Signature workflow POC");
+            signature.setName("PDF Forms POC %s".formatted(signerName));
+            signature.setReason("Signature %s".formatted(signerName));
             signature.setSignDate(Calendar.getInstance());
 
             SignatureOptions options = new SignatureOptions();
