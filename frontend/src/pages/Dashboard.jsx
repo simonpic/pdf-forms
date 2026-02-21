@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { FileText, FolderOpen, Clock, Loader2, PenLine, CheckCircle2, Download } from 'lucide-react'
+import { FileText, FolderOpen, Clock, Loader2, PenLine, CheckCircle2, Download, Copy, Check } from 'lucide-react'
 import { Card } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Progress } from '../components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { fetchWorkflows, downloadWorkflowPdf } from '../api/workflows'
 
@@ -23,29 +22,33 @@ const STATUS_BORDER = {
   COMPLETED: 'border-l-emerald-400',
 }
 
-const PROGRESS_COLOR = {
-  DRAFT: 'bg-slate-400',
-  IN_PROGRESS: 'bg-amber-400',
-  COMPLETED: 'bg-emerald-500',
-}
-
 const SIGNER_ICON = {
-  PENDING: <Clock size={13} className="text-slate-300 shrink-0" />,
-  IN_PROGRESS: <PenLine size={13} className="text-amber-500 shrink-0" />,
-  SIGNED: <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />,
+  PENDING:     <Clock       size={13} className="text-slate-300 shrink-0" />,
+  IN_PROGRESS: <PenLine     size={13} className="text-amber-500 shrink-0" />,
+  SIGNED:      <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />,
 }
 
 function formatDate(iso) {
   return format(new Date(iso), 'd MMM yyyy', { locale: fr })
 }
 
+function formatRelative(iso) {
+  return formatDistanceToNow(new Date(iso), { locale: fr, addSuffix: true })
+}
+
 function WorkflowCard({ workflow }) {
-  const signedCount = workflow.signers.filter((s) => s.status === 'SIGNED').length
-  const totalCount = workflow.signers.length
-  const progress = totalCount > 0 ? (signedCount / totalCount) * 100 : 0
-  const createdStr = formatDate(workflow.createdAt)
-  const updatedStr = formatDate(workflow.updatedAt)
-  const showUpdated = createdStr !== updatedStr
+  const [copiedId, setCopiedId] = useState(null)
+
+  const createdStr  = formatDate(workflow.createdAt)
+  const showUpdated = workflow.createdAt !== workflow.updatedAt
+
+  const copyLink = (signerId) => {
+    const url = `${window.location.origin}/${workflow.id}/signature/${signerId}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(signerId)
+      setTimeout(() => setCopiedId(null), 2000)
+    })
+  }
 
   return (
     <Card className={`p-3 space-y-2 border-l-4 ${STATUS_BORDER[workflow.status]}`}>
@@ -72,15 +75,12 @@ function WorkflowCard({ workflow }) {
           <FileText size={11} className="shrink-0" />
           {workflow.pdfOriginalName}
         </span>
-        <span className="shrink-0">
-          {createdStr}{showUpdated ? ` · maj ${updatedStr}` : ''}
+        <span className="shrink-0" title={showUpdated ? `Modifié le ${formatDate(workflow.updatedAt)}` : undefined}>
+          {createdStr}
+          {showUpdated && (
+            <span className="text-slate-300"> · modifié {formatRelative(workflow.updatedAt)}</span>
+          )}
         </span>
-      </div>
-
-      {/* Ligne 3 : barre de progression */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-500 shrink-0">{signedCount}/{totalCount} signatures</span>
-        <Progress value={progress} className="flex-1" indicatorClassName={PROGRESS_COLOR[workflow.status]} />
       </div>
 
       {/* Signataires */}
@@ -90,17 +90,21 @@ function WorkflowCard({ workflow }) {
           .map((signer) => (
             <div key={signer.order} className="flex items-center gap-1.5 text-xs">
               {SIGNER_ICON[signer.status]}
-              <span className="text-slate-400 shrink-0">#{signer.order}</span>
-              <span className="text-slate-700 truncate">{signer.name}</span>
+              <span className="text-slate-700 truncate flex-1">{signer.name}</span>
               {signer.status === 'IN_PROGRESS' && (
-                <a
-                  href={`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-500 hover:text-indigo-700 hover:underline truncate"
+                <button
+                  onClick={() => copyLink(signer.signerId)}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors shrink-0 ${
+                    copiedId === signer.signerId
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                  }`}
                 >
-                  {`${window.location.origin}/${workflow.id}/signature/${signer.signerId}`}
-                </a>
+                  {copiedId === signer.signerId
+                    ? <><Check size={11} /> Copié !</>
+                    : <><Copy size={11} /> Copier le lien</>
+                  }
+                </button>
               )}
             </div>
           ))}
@@ -146,8 +150,8 @@ export default function Dashboard() {
 
   const counts = {
     IN_PROGRESS: sorted.filter((w) => w.status === 'IN_PROGRESS').length,
-    COMPLETED: sorted.filter((w) => w.status === 'COMPLETED').length,
-    DRAFT: sorted.filter((w) => w.status === 'DRAFT').length,
+    COMPLETED:   sorted.filter((w) => w.status === 'COMPLETED').length,
+    DRAFT:       sorted.filter((w) => w.status === 'DRAFT').length,
   }
 
   const filtered =
@@ -171,7 +175,6 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-      {/* Liste */}
       {sorted.length === 0 ? (
         <EmptyState />
       ) : (
@@ -179,13 +182,11 @@ export default function Dashboard() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value={TAB_ALL}>Tous ({sorted.length})</TabsTrigger>
-              <TabsTrigger value="IN_PROGRESS">
-                En cours ({counts.IN_PROGRESS})
-              </TabsTrigger>
-              <TabsTrigger value="COMPLETED">
-                Complétés ({counts.COMPLETED})
-              </TabsTrigger>
-              <TabsTrigger value="DRAFT">Brouillons ({counts.DRAFT})</TabsTrigger>
+              <TabsTrigger value="IN_PROGRESS">En cours ({counts.IN_PROGRESS})</TabsTrigger>
+              <TabsTrigger value="COMPLETED">Complétés ({counts.COMPLETED})</TabsTrigger>
+              {counts.DRAFT > 0 && (
+                <TabsTrigger value="DRAFT">Brouillons ({counts.DRAFT})</TabsTrigger>
+              )}
             </TabsList>
           </Tabs>
 
