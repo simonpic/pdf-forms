@@ -158,14 +158,7 @@ export default function Dashboard() {
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
       {/* Header de page */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Mes workflows</h1>
-          <p className="text-sm text-slate-400 mt-0.5">
-            {sorted.length === 0
-              ? 'Aucun workflow pour le moment.'
-              : `${sorted.length} workflow${sorted.length > 1 ? 's' : ''}`}
-          </p>
-        </div>
+        <h1 className="text-xl font-semibold text-slate-900">Mes workflows</h1>
         <Button
           className="gap-1.5 bg-indigo-500 hover:bg-indigo-600"
           onClick={() => navigate('/workflow/new')}
