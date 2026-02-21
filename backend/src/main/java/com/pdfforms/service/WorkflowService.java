@@ -240,6 +240,7 @@ public class WorkflowService {
 
         return SignerDocumentResponse.builder()
                 .workflowId(workflowId)
+                .workflowName(workflow.getName())
                 .signerName(signer.getName())
                 .signerId(signer.getSignerId())
                 .pdfBase64(pdfBase64)

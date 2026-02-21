@@ -13,6 +13,7 @@ import java.util.List;
 @AllArgsConstructor
 public class SignerDocumentResponse {
     private String workflowId;
+    private String workflowName;
     private String signerName;
     private String signerId;
     private String pdfBase64;          // PDF aplati encodé en base64

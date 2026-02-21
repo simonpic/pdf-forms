@@ -140,11 +140,12 @@ export default function SignerPage() {
             <FileSignature size={16} className="text-indigo-500" />
           </div>
           <div>
-            <h1 className="text-base font-semibold text-slate-900">Document à signer</h1>
+            <h1 className="text-base font-semibold text-slate-900">
+              {docData?.workflowName ?? 'Document à signer'}
+            </h1>
             <p className="text-sm text-slate-400">
               Signataire :{' '}
               <span className="font-medium text-slate-700">{docData?.signerName}</span>
-              <span className="font-mono text-xs text-slate-400 ml-1.5">{docData?.signerId}</span>
             </p>
           </div>
         </div>
@@ -155,8 +156,10 @@ export default function SignerPage() {
         <div className="flex-1 overflow-auto bg-slate-100 flex items-start justify-center p-6">
           {pdfData ? (
             <div className="flex flex-col items-center gap-3">
-              <p className="text-xs text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
-                Remplissez les champs surlignés, puis signez.
+              <p className="text-xs text-slate-600 bg-white px-4 py-2 rounded-full border border-indigo-100 shadow-sm font-medium">
+                {fields.length > 0
+                  ? 'Remplissez les champs mis en évidence dans le document, puis signez dans le panneau à droite.'
+                  : 'Consultez le document ci-dessous, puis signez dans le panneau à droite.'}
               </p>
               <PDFCanvas
                 pdfData={pdfData}
