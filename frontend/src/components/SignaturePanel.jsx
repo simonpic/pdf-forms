@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
-import { PenLine, CheckCircle, AlertCircle, Type, SquareCheck, CircleDot, X, ShieldCheck } from 'lucide-react'
+import { PenLine, CheckCircle, AlertCircle, Type, SquareCheck, CircleDot, ShieldCheck } from 'lucide-react'
 
 // Calcule si un champ individuel est "rempli" selon son type
 function isFieldFilled(f, values) {
@@ -101,7 +101,7 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
         <CardContent className="space-y-4">
 
           {/* État des champs */}
-          {hasFields ? (
+          {hasFields && (
             <div className="space-y-2">
               <p className="text-sm text-slate-600 font-medium">Vos champs à remplir :</p>
               {displayItems.map((item) => {
@@ -120,12 +120,6 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
                   </div>
                 )
               })}
-            </div>
-          ) : (
-            <div className="rounded-md bg-slate-50 border border-slate-200 p-3 text-sm text-slate-500 text-center">
-              <X size={16} className="mx-auto mb-1 text-slate-300" />
-              Aucun champ à remplir.<br />
-              <span className="text-xs">Vous pouvez signer directement.</span>
             </div>
           )}
 

@@ -139,7 +139,15 @@ public class PdfBoxService {
     public byte[] createMasterPdf(byte[] originalPdfBytes, List<FieldRequest> fields) throws IOException {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(originalPdfBytes))) {
 
-            // Créer ou récupérer l'AcroForm
+            // Supprimer les annotations widget de l'AcroForm original pour éviter les widgets
+            // orphelins qui invalident la signature (le /Parent référence un champ supprimé).
+            for (PDPage page : doc.getPages()) {
+                List<PDAnnotation> annots = page.getAnnotations();
+                annots.removeIf(a -> a instanceof PDAnnotationWidget);
+                page.setAnnotations(annots);
+            }
+
+            // Créer le nouvel AcroForm (remplace l'ancien)
             PDAcroForm acroForm = new PDAcroForm(doc);
             doc.getDocumentCatalog().setAcroForm(acroForm);
 
