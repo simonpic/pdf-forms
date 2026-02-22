@@ -71,6 +71,14 @@ export default function FieldDrawingLayer({
     setPendingRect(null)
   }, [activeTool])
 
+  const handleCancelPopup = useCallback(() => {
+    setShowPopup(false)
+    setPendingRect(null)
+    setCurrentRect(null)
+    setStartPos(null)
+    setReassigningFieldIndex(null)
+  }, [])
+
   const getRelativePos = (e) => {
     const rect = layerRef.current.getBoundingClientRect()
     return { x: e.clientX - rect.left, y: e.clientY - rect.top }
@@ -78,8 +86,7 @@ export default function FieldDrawingLayer({
 
   const handleMouseDown = useCallback((e) => {
     if (showPopup) {
-      setShowPopup(false); setPendingRect(null); setCurrentRect(null)
-      setStartPos(null); setReassigningFieldIndex(null)
+      handleCancelPopup()
       return
     }
     e.preventDefault()
@@ -418,6 +425,11 @@ export default function FieldDrawingLayer({
             borderRadius: activeTool === 'radio' ? '50%' : 3,
           }}
         />
+      )}
+
+      {/* Overlay transparent — ferme la popup au clic en dehors */}
+      {showPopup && (
+        <div className="fixed inset-0 z-40" onMouseDown={handleCancelPopup} />
       )}
 
       {/* Popup de configuration */}
