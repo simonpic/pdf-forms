@@ -45,6 +45,7 @@ export default function FieldDrawingLayer({
   onFieldMoved,
   onFieldRemoved,
   activeTool = 'text',
+  disabled = false,
 }) {
   const [drawing, setDrawing] = useState(false)
   const [startPos, setStartPos] = useState(null)
@@ -282,8 +283,9 @@ export default function FieldDrawingLayer({
     <div
       ref={layerRef}
       className={`absolute inset-0 ${
-        showPopup                ? 'cursor-default'
-        : dragState?.isActive   ? 'cursor-grabbing'
+        disabled                 ? 'pointer-events-none'
+        : showPopup              ? 'cursor-default'
+        : dragState?.isActive    ? 'cursor-grabbing'
         : hoveredFieldIndex !== -1 ? 'cursor-pointer'
         : 'cursor-crosshair'
       }`}

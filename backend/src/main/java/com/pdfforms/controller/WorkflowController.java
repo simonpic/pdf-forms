@@ -39,7 +39,6 @@ public class WorkflowController {
     @PostMapping(value = "/analyze-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<AnalyzePdfResponse> analyzePdf(
             @RequestParam("file") MultipartFile file) throws Exception {
-
         log.info("POST /api/workflows/analyze-pdf - fichier: {} ({} bytes)",
                 file.getOriginalFilename(), file.getSize());
 
