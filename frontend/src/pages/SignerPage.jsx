@@ -4,7 +4,7 @@ import PDFCanvas from '../components/PDFCanvas'
 import FieldOverlay from '../components/FieldOverlay'
 import SignaturePanel from '../components/SignaturePanel'
 import { getSignerDocument, fillAndSign } from '../api/workflowApi'
-import { AlertTriangle, Loader2, FileSignature } from 'lucide-react'
+import { AlertTriangle, Loader2, FileSignature, CheckCircle } from 'lucide-react'
 
 export default function SignerPage() {
   const { workflowId, signerId } = useParams()
@@ -14,6 +14,7 @@ export default function SignerPage() {
   const [docData, setDocData] = useState(null)
   const [pdfData, setPdfData] = useState(null)
   const [fieldValues, setFieldValues] = useState({})
+  const [signed, setSigned] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -74,6 +75,7 @@ export default function SignerPage() {
   const handleFillAndSign = useCallback(async () => {
     if (!docData) return
     await fillAndSign(docData.workflowId, docData.signerName, fieldValues)
+    setSigned(true)
   }, [docData, fieldValues])
 
   // Chargement
@@ -124,6 +126,44 @@ export default function SignerPage() {
 
   // Document prêt
   const fields = docData?.fields ?? []
+
+  // Écran de succès post-signature
+  if (signed) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <header className="bg-white border-b border-slate-200 px-6 py-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+              <FileSignature size={16} className="text-indigo-500" />
+            </div>
+            <div>
+              <h1 className="text-base font-semibold text-slate-900">
+                {docData?.workflowName ?? 'Document à signer'}
+              </h1>
+              <p className="text-sm text-slate-400">
+                Signataire :{' '}
+                <span className="font-medium text-slate-700">{docData?.signerName}</span>
+              </p>
+            </div>
+          </div>
+        </header>
+        <div className="flex justify-center pt-20 px-6">
+          <div className="text-center space-y-4 max-w-sm">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto">
+              <CheckCircle size={32} className="text-emerald-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">Document signé !</h2>
+              <p className="text-sm text-slate-500 mt-2">
+                Votre signature a été enregistrée avec succès.
+              </p>
+            </div>
+            <p className="text-xs text-slate-400">Vous pouvez fermer cette page.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

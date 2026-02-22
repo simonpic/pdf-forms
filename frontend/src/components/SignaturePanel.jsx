@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
-import { PenLine, CheckCircle, AlertCircle, Type, SquareCheck, CircleDot, ShieldCheck } from 'lucide-react'
+import { PenLine, AlertCircle, Type, SquareCheck, CircleDot, ShieldCheck } from 'lucide-react'
 
 // Calcule si un champ individuel est "rempli" selon son type
 function isFieldFilled(f, values) {
@@ -43,7 +43,6 @@ const TYPE_ICON = {
 }
 
 export default function SignaturePanel({ fields, values, signerName, workflowName, onFillAndSign }) {
-  const [done, setDone]       = useState(false)
   const [error, setError]     = useState(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen]       = useState(false)
@@ -57,36 +56,11 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
     setLoading(true)
     try {
       await onFillAndSign()
-      setDone(true)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }
-
-  // État final — document signé
-  if (done) {
-    return (
-      <Card className="border-emerald-200 bg-emerald-50">
-        <CardContent className="pt-5 space-y-3">
-          <div className="flex items-center gap-3 text-emerald-700">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-              <CheckCircle size={20} />
-            </div>
-            <div>
-              <p className="font-semibold">Document signé !</p>
-              <p className="text-sm text-emerald-600">
-                Votre signature a été enregistrée avec succès.
-              </p>
-            </div>
-          </div>
-          <p className="text-xs text-emerald-700 bg-emerald-100 rounded-md px-3 py-2 leading-relaxed">
-            Vous pouvez fermer cette page.
-          </p>
-        </CardContent>
-      </Card>
-    )
   }
 
   return (
