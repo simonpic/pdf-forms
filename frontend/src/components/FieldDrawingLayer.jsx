@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, Fragment } from 'react'
 import { GripVertical, Trash2 } from 'lucide-react'
+import { SIGNER_UI_COLORS } from '@/lib/signerColors'
 
 const SIGNER_COLORS = [
   'rgba(59, 130, 246, 0.35)',
@@ -486,12 +487,13 @@ export default function FieldDrawingLayer({
                 {signers.map((signer, index) => {
                   const isSelected = pendingSignerIndex === index
                   const color = SIGNER_BORDER_COLORS[index % SIGNER_BORDER_COLORS.length]
+                  const uiColor = SIGNER_UI_COLORS[index % SIGNER_UI_COLORS.length]
                   return (
                     <button
                       key={signer.signerId}
                       onClick={() => setPendingSignerIndex(index)}
                       className={`flex items-center gap-2.5 w-full text-left px-2 py-1.5 rounded-md transition-colors ${
-                        isSelected ? 'bg-slate-50' : 'hover:bg-slate-50'
+                        isSelected ? uiColor.rowBg : 'hover:bg-slate-50'
                       }`}
                     >
                       <div

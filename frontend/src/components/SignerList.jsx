@@ -5,6 +5,7 @@ import { Label } from './ui/label'
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
 import { slugify } from '@/lib/utils'
+import { SIGNER_UI_COLORS } from '@/lib/signerColors'
 import { UserPlus, Trash2, Users } from 'lucide-react'
 
 export default function SignerList({ signers, onChange }) {
@@ -53,7 +54,7 @@ export default function SignerList({ signers, onChange }) {
                 className="flex items-center justify-between gap-2 p-2 rounded-md bg-slate-50 border border-slate-100"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <Badge className="bg-indigo-100 text-indigo-700 shrink-0">
+                  <Badge className={`shrink-0 ${SIGNER_UI_COLORS[index % SIGNER_UI_COLORS.length].badge}`}>
                     #{signer.order}
                   </Badge>
                   <div className="min-w-0">
