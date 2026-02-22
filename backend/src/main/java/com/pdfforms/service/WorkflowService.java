@@ -109,6 +109,8 @@ public class WorkflowService {
 
         // 2. Créer le PDF master avec les champs AcroForm
         byte[] masterPdf = pdfBoxService.createMasterPdf(originalPdfBytes, request.getFields());
+        masterPdf = pdfBoxService.signPdf(masterPdf, signingKeyPair.getPrivate(), signingCertificate, "coc_platform",
+                true);
 
         // 3. Générer le PDF aplati initial (champs vides rendus visuellement)
         byte[] flattenedPdf = pdfBoxService.flattenPdf(masterPdf);
@@ -347,7 +349,7 @@ public class WorkflowService {
                 signingKeyPair.getPrivate(),
                 signingCertificate,
                 signer.getSignerId(),
-                signer.getOrder() == 1
+                false
         );
 
         document.setMasterPdf(signedPdf);
@@ -365,15 +367,6 @@ public class WorkflowService {
         if (isLast) {
             workflow.setStatus(WorkflowStatus.COMPLETED);
             workflow.setCurrentSignerOrder(nextOrder);
-            signedPdf = pdfBoxService.signPdf(
-                    document.getMasterPdf(),
-                    signingKeyPair.getPrivate(),
-                    signingCertificate,
-                    "platform",
-                    false
-            );
-            document.setMasterPdf(signedPdf);
-            documentRepository.save(document);
             log.info("Workflow {} COMPLETED après signature de '{}'.", workflowId, signerId);
         } else {
             workflow.setCurrentSignerOrder(nextOrder);

@@ -297,7 +297,7 @@ public class PdfBoxService {
     public byte[] signPdf(byte[] masterPdfBytes,
                           PrivateKey privateKey,
                           X509Certificate certificate,
-                          String signerName, boolean first) throws Exception {
+                          String signerName, boolean addPerm) throws Exception {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
             PDSignature signature = new PDSignature();
             signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
@@ -306,7 +306,7 @@ public class PdfBoxService {
             signature.setReason("Signature %s".formatted(signerName));
             signature.setSignDate(Calendar.getInstance());
 
-            if (first) {
+            if (addPerm) {
                 // Définir les permissions MDP (P=2 : champs AcroForm modifiables)
                 COSDictionary transformParams = new COSDictionary();
                 transformParams.setItem(COSName.TYPE, COSName.getPDFName("TransformParams"));
