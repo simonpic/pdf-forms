@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from './ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card'
+import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
 import { PenLine, AlertCircle, Type, SquareCheck, CircleDot, ShieldCheck } from 'lucide-react'
 
@@ -63,19 +63,33 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
     }
   }
 
+  const buttonAndError = (
+    <div className="space-y-4">
+      {/* Erreur */}
+      {error && (
+        <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Bouton principal */}
+      <Button
+        className="w-full bg-indigo-500 hover:bg-indigo-600"
+        disabled={loading}
+        onClick={() => setOpen(true)}
+      >
+        <PenLine size={16} />
+        {loading ? 'Signature en cours…' : 'Signer le document'}
+      </Button>
+    </div>
+  )
+
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-slate-700">
-            <PenLine size={15} className="text-indigo-500" />
-            Signature de {signerName}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-
-          {/* État des champs */}
-          {hasFields && (
+      {hasFields ? (
+        <Card>
+          <CardContent className="space-y-4 pt-4">
             <div className="space-y-2">
               <p className="text-sm text-slate-600 font-medium">Vos champs à remplir :</p>
               {displayItems.map((item) => {
@@ -95,27 +109,12 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
                 )
               })}
             </div>
-          )}
-
-          {/* Erreur */}
-          {error && (
-            <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Bouton principal */}
-          <Button
-            className="w-full bg-indigo-500 hover:bg-indigo-600"
-            disabled={loading}
-            onClick={() => setOpen(true)}
-          >
-            <PenLine size={16} />
-            {loading ? 'Signature en cours…' : 'Signer le document'}
-          </Button>
-        </CardContent>
-      </Card>
+            {buttonAndError}
+          </CardContent>
+        </Card>
+      ) : (
+        buttonAndError
+      )}
 
       {/* Modale de confirmation */}
       <Dialog.Root open={open} onOpenChange={setOpen}>

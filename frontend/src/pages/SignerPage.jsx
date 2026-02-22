@@ -196,13 +196,13 @@ export default function SignerPage() {
 
       <div className="flex gap-0 h-[calc(100vh-65px)]">
         {/* Zone principale — PDF */}
-        <div className="flex-1 overflow-auto bg-slate-100 flex items-start justify-center p-6">
+        <div className="flex-1 overflow-auto bg-slate-100 flex items-start justify-center p-2">
           {pdfData ? (
             <div className="flex flex-col items-center gap-3">
-              <p className="text-xs text-slate-600 bg-white px-4 py-2 rounded-full border border-indigo-100 shadow-sm font-medium">
+              <p className="text-xs text-slate-500 bg-white px-4 py-2 rounded-full border border-indigo-100 shadow-sm font-medium">
                 {fields.length > 0
-                  ? 'Remplissez les champs mis en évidence dans le document, puis signez dans le panneau à droite.'
-                  : 'Consultez le document ci-dessous, puis signez dans le panneau à droite.'}
+                  ? 'Remplissez les champs mis en évidence dans le document, puis signez.'
+                  : 'Consultez le document ci-dessous, puis signez.'}
               </p>
               <PDFCanvas
                 pdfData={pdfData}
