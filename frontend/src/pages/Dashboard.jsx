@@ -52,7 +52,7 @@ function WorkflowCard({ workflow }) {
             size="sm"
             variant="outline"
             className="gap-1 h-6 px-2 text-xs shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-            onClick={() => downloadWorkflowPdf(workflow.id, `${workflow.name}-signé.pdf`)}
+            onClick={() => downloadWorkflowPdf(workflow.id, `${workflow.name}.pdf`)}
           >
             <Download size={12} />
             Télécharger

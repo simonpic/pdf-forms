@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.security.KeyPair;
 import java.security.cert.X509Certificate;
 import java.text.Normalizer;
@@ -391,7 +393,7 @@ public class WorkflowService {
     /**
      * Retourne le PDF master final, disponible uniquement si status == COMPLETED.
      */
-    public byte[] downloadFinalPdf(String workflowId) {
+    public String downloadFinalPdf(String workflowId, OutputStream outputStream) throws IOException {
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Workflow introuvable : " + workflowId));
@@ -405,6 +407,8 @@ public class WorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Document introuvable."));
 
-        return document.getMasterPdf();
+        outputStream.write(document.getMasterPdf());
+
+        return workflow.getName() + ".pdf";
     }
 }

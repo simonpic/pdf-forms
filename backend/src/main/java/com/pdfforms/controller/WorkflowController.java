@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pdfforms.dto.*;
 import com.pdfforms.service.PdfBoxService;
 import com.pdfforms.service.WorkflowService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -107,17 +109,14 @@ public class WorkflowController {
      * GET /api/workflows/{workflowId}/download
      * Télécharge le PDF master final (uniquement si workflow COMPLETED).
      */
-    @GetMapping("/{workflowId}/download")
-    public ResponseEntity<byte[]> downloadFinalPdf(
-            @PathVariable String workflowId) {
+    @GetMapping(value = "/{workflowId}/download", produces = MediaType.APPLICATION_PDF_VALUE)
+    public void downloadFinalPdf(
+            @PathVariable String workflowId, HttpServletResponse response) throws IOException {
 
         log.info("GET /api/workflows/{}/download", workflowId);
-        byte[] pdfBytes = workflowService.downloadFinalPdf(workflowId);
+        String fileName = workflowService.downloadFinalPdf(workflowId, response.getOutputStream());
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"workflow-" + workflowId + "-signed.pdf\"")
-                .contentType(MediaType.APPLICATION_PDF)
-                .body(pdfBytes);
+        response.addHeader(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"" + fileName + "\"");
     }
 }
