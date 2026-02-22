@@ -129,6 +129,7 @@ export default function CreateWorkflow() {
         signers: signers.map((s) => ({ name: s.name, order: s.order })),
         fields: fields.map((f) => ({
           fieldName: f.fieldName,
+          label: f.label || '',
           assignedTo: f.assignedTo,
           fieldType: f.fieldType ?? 'text',
           page: f.page,

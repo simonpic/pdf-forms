@@ -5,6 +5,7 @@ import lombok.Data;
 @Data
 public class FieldRequest {
     private String fieldName;
+    private String label;        // libellé lisible affiché au signataire
     private String assignedTo;   // signerId
     private String fieldType;    // "text" | "checkbox" | "radio"
     private String groupName;    // non-null pour les boutons radio

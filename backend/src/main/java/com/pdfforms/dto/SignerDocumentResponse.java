@@ -18,4 +18,5 @@ public class SignerDocumentResponse {
     private String signerId;
     private String pdfBase64;          // PDF aplati encodé en base64
     private List<FieldDto> fields;     // Champs assignés à ce signataire
+    private boolean lastSigner;        // true si c'est le dernier signataire du workflow
 }

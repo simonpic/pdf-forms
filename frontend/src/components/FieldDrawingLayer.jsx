@@ -51,6 +51,8 @@ export default function FieldDrawingLayer({
   const [currentRect, setCurrentRect] = useState(null)
   const [pendingRect, setPendingRect] = useState(null)
   const [showPopup, setShowPopup] = useState(false)
+  const [fieldLabel, setFieldLabel] = useState('')
+  const [pendingSignerIndex, setPendingSignerIndex] = useState(-1)
   const [radioGroupName, setRadioGroupName] = useState('groupe_1')
   const [hoveredFieldIndex, setHoveredFieldIndex] = useState(-1)
   const [reassigningFieldIndex, setReassigningFieldIndex] = useState(null)
@@ -104,6 +106,8 @@ export default function FieldDrawingLayer({
         // Checkbox/radio corps → popup d'assignation
         setReassigningFieldIndex(hitIndex)
         setPendingRect(field.canvasRect)
+        setFieldLabel(field.label || '')
+        setPendingSignerIndex(signers.findIndex(s => s.signerId === field.assignedTo))
         if (field.fieldType === 'radio') setRadioGroupName(field.groupName || 'groupe_1')
         setShowPopup(true)
       }
@@ -170,6 +174,8 @@ export default function FieldDrawingLayer({
         const field = fields[dragState.fieldIndex]
         setReassigningFieldIndex(dragState.fieldIndex)
         setPendingRect(field.canvasRect)
+        setFieldLabel(field.label || '')
+        setPendingSignerIndex(signers.findIndex(s => s.signerId === field.assignedTo))
         if (field.fieldType === 'radio') setRadioGroupName(field.groupName || 'groupe_1')
         setShowPopup(true)
       }
@@ -185,6 +191,10 @@ export default function FieldDrawingLayer({
       setDrawing(false)
       if (currentRect && currentRect.width > 15 && currentRect.height > 10) {
         setPendingRect(currentRect)
+        setFieldLabel('')
+        setPendingSignerIndex(-1)
+        setCurrentRect(null)
+        setStartPos(null)
         setShowPopup(true)
       } else {
         setCurrentRect(null)
@@ -203,12 +213,15 @@ export default function FieldDrawingLayer({
         const last = existingGroups[existingGroups.length - 1]
         setRadioGroupName(last ?? 'groupe_1')
       }
+      setFieldLabel('')
+      setPendingSignerIndex(-1)
       setStartPos(null)
       setShowPopup(true)
     }
   }, [dragState, dragOffset, startPos, activeTool, currentRect, fields, scale, pageHeightPt, onFieldMoved])
 
   const handleAssign = (signer, index) => {
+    const trimmedLabel = fieldLabel.trim()
     if (reassigningFieldIndex !== null) {
       // Mode réassignation : on met à jour le champ existant
       const fieldType = fields[reassigningFieldIndex].fieldType
@@ -216,6 +229,7 @@ export default function FieldDrawingLayer({
         assignedTo: signer ? signer.signerId : '',
         signerName: signer ? signer.name : null,
         signerIndex: signer ? index : -1,
+        label: trimmedLabel,
         ...(fieldType === 'radio' ? { groupName: radioGroupName.trim() || 'groupe_1' } : {}),
       })
       setReassigningFieldIndex(null)
@@ -231,6 +245,7 @@ export default function FieldDrawingLayer({
       const field = {
         fieldType: activeTool,
         fieldName: `${activeTool}_${signer ? signer.signerId : 'unassigned'}_${Date.now()}`,
+        label: trimmedLabel,
         assignedTo: signer ? signer.signerId : '',
         signerName: signer ? signer.name : null,
         signerIndex: signer ? index : -1,
@@ -249,14 +264,6 @@ export default function FieldDrawingLayer({
     setPendingRect(null)
     setCurrentRect(null)
     setStartPos(null)
-  }
-
-  const handleCancelPopup = () => {
-    setShowPopup(false)
-    setPendingRect(null)
-    setCurrentRect(null)
-    setStartPos(null)
-    setReassigningFieldIndex(null)
   }
 
   const handleNewRadioGroup = () => {
@@ -317,6 +324,27 @@ export default function FieldDrawingLayer({
 
         return (
           <Fragment key={field.fieldName}>
+            {/* Label au-dessus du champ */}
+            {field.label && (
+              <div
+                className="absolute pointer-events-none select-none"
+                style={{
+                  left: rect.x,
+                  top: rect.y - 15,
+                  maxWidth: rect.width + 40,
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  lineHeight: 1,
+                }}
+              >
+                {field.label}
+              </div>
+            )}
+
             <div
               className="absolute flex items-center justify-center pointer-events-none select-none"
               style={{
@@ -390,103 +418,156 @@ export default function FieldDrawingLayer({
         />
       )}
 
-      {/* Popup d'assignation */}
+      {/* Popup de configuration */}
       {showPopup && pendingRect && (
         <div
-          className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-xl p-3 w-52"
+          className="absolute z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-64 overflow-hidden"
           style={{
-            left: Math.min(pendingRect.x + pendingRect.width + 8, window.innerWidth - 230),
-            top: pendingRect.y,
+            left: Math.min(pendingRect.x + pendingRect.width + 8, window.innerWidth - 272),
+            top: Math.max(8, pendingRect.y),
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <p className="text-xs font-semibold text-gray-700 mb-2">Assigner à :</p>
-
-          {signers.length > 0 && (
-            <div className="flex flex-col gap-1">
-              {signers.map((signer, index) => (
-                <button
-                  key={signer.signerId}
-                  className="text-left text-xs px-2 py-1.5 rounded hover:bg-blue-50 transition-colors"
-                  style={{ color: SIGNER_BORDER_COLORS[index % SIGNER_BORDER_COLORS.length] }}
-                  onClick={() => handleAssign(signer, index)}
-                >
-                  {index + 1}. {signer.name}
-                </button>
-              ))}
-              <div className="border-t border-gray-100 mt-1 pt-1" />
-            </div>
-          )}
-          <button
-            className="text-left text-xs px-2 py-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
-            onClick={() => handleAssign(null, -1)}
-          >
-            Sans assignation
-          </button>
-
-          {/* Suppression — uniquement en mode réassignation */}
-          {reassigningFieldIndex !== null && (
-            <div className="mt-2 pt-2 border-t border-gray-100">
+          {/* Header */}
+          <div className="flex justify-between px-4 pt-3 pb-2.5 border-b border-slate-100">
+            <span className="text-xs font-semibold text-slate-700">Configurer le champ</span>
+            {reassigningFieldIndex !== null && (
               <button
-                className="flex items-center gap-1.5 w-full text-left text-xs px-2 py-1.5 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-600 transition-colors"
                 onClick={() => {
                   onFieldRemoved(reassigningFieldIndex)
                   setShowPopup(false)
                   setPendingRect(null)
                   setReassigningFieldIndex(null)
+                  setFieldLabel('')
+                  setPendingSignerIndex(-1)
                 }}
               >
                 <Trash2 size={11} />
-                Supprimer le champ
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Section groupe radio */}
-          {(reassigningFieldIndex !== null
-            ? fields[reassigningFieldIndex]?.fieldType === 'radio'
-            : activeTool === 'radio') && (
-            <div className="mt-2 pt-2 border-t border-gray-100">
-              <p className="text-xs font-semibold text-gray-700 mb-1.5">Groupe radio :</p>
+          {/* Body */}
+          <div className="px-4 py-3 space-y-4">
 
-              {/* Groupes existants */}
-              {existingRadioGroups.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-1.5">
-                  {existingRadioGroups.map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setRadioGroupName(g)}
-                      className={`text-xs px-1.5 py-0.5 rounded border transition-colors ${
-                        radioGroupName === g
-                          ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                          : 'border-gray-200 text-gray-500 hover:border-indigo-200 hover:text-indigo-600'
-                      }`}
-                    >
-                      {g}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={handleNewRadioGroup}
-                    className="text-xs px-1.5 py-0.5 rounded border border-dashed border-gray-300 text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
-                    title="Nouveau groupe"
-                  >
-                    + nouveau
-                  </button>
-                </div>
-              )}
-
+            {/* Label */}
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Label</label>
               <input
                 type="text"
-                value={radioGroupName}
-                onChange={(e) => setRadioGroupName(e.target.value)}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-indigo-400"
-                placeholder="groupe_1"
+                value={fieldLabel}
+                onChange={(e) => setFieldLabel(e.target.value)}
+                placeholder="Ex : Nom complet, Date…"
+                className="w-full text-xs border border-slate-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 bg-slate-50"
+                onKeyDown={(e) => e.stopPropagation()}
+                autoFocus
               />
             </div>
-          )}
 
+            {/* Signataire */}
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1.5">Signataire</label>
+              <div className="space-y-0.5">
+                {signers.map((signer, index) => {
+                  const isSelected = pendingSignerIndex === index
+                  const color = SIGNER_BORDER_COLORS[index % SIGNER_BORDER_COLORS.length]
+                  return (
+                    <button
+                      key={signer.signerId}
+                      onClick={() => setPendingSignerIndex(index)}
+                      className={`flex items-center gap-2.5 w-full text-left px-2 py-1.5 rounded-md transition-colors ${
+                        isSelected ? 'bg-slate-50' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div
+                        className="w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
+                        style={{ borderColor: isSelected ? color : '#cbd5e1' }}
+                      >
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />}
+                      </div>
+                      <span
+                        className="text-xs truncate font-medium transition-colors"
+                        style={{ color: isSelected ? color : '#64748b' }}
+                      >
+                        {signer.name}
+                      </span>
+                    </button>
+                  )
+                })}
+
+                {/* Sans assignation */}
+                <button
+                  onClick={() => setPendingSignerIndex(-1)}
+                  className={`flex items-center gap-2.5 w-full text-left px-2 py-1.5 rounded-md transition-colors ${
+                    pendingSignerIndex === -1 ? 'bg-slate-50' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div
+                    className="w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0"
+                    style={{ borderColor: pendingSignerIndex === -1 ? '#94a3b8' : '#cbd5e1' }}
+                  >
+                    {pendingSignerIndex === -1 && <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />}
+                  </div>
+                  <span className="text-xs text-slate-400">Sans assignation</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Groupe radio */}
+            {(reassigningFieldIndex !== null
+              ? fields[reassigningFieldIndex]?.fieldType === 'radio'
+              : activeTool === 'radio') && (
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1.5">Groupe radio</label>
+                {existingRadioGroups.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-1.5">
+                    {existingRadioGroups.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setRadioGroupName(g)}
+                        className={`text-xs px-1.5 py-0.5 rounded border transition-colors ${
+                          radioGroupName === g
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                            : 'border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleNewRadioGroup}
+                      className="text-xs px-1.5 py-0.5 rounded border border-dashed border-slate-300 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+                    >
+                      + nouveau
+                    </button>
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={radioGroupName}
+                  onChange={(e) => setRadioGroupName(e.target.value)}
+                  className="w-full text-xs border border-slate-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-indigo-400 bg-slate-50"
+                  placeholder="groupe_1"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 py-3 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => handleAssign(
+                  pendingSignerIndex >= 0 ? signers[pendingSignerIndex] : null,
+                  pendingSignerIndex
+                )}
+                className="text-xs px-3 py-1.5 rounded-md bg-indigo-500 hover:bg-indigo-600 text-white font-medium transition-colors"
+              >
+                Confirmer
+              </button>
+          </div>
         </div>
       )}
     </div>

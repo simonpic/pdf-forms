@@ -137,6 +137,7 @@ public class WorkflowService {
         List<FieldDefinition> fieldDefs = request.getFields().stream()
                 .map(fr -> FieldDefinition.builder()
                         .fieldName(fr.getFieldName())
+                        .label(fr.getLabel())
                         .assignedTo(fr.getAssignedTo())
                         .fieldType(fr.getFieldType() != null ? fr.getFieldType() : "text")
                         .groupName(fr.getGroupName())
@@ -225,6 +226,7 @@ public class WorkflowService {
                 .filter(f -> f.getAssignedTo().equals(signerId))
                 .map(f -> FieldDto.builder()
                         .fieldName(f.getFieldName())
+                        .label(f.getLabel())
                         .fieldType(f.getFieldType() != null ? f.getFieldType() : "text")
                         .groupName(f.getGroupName())
                         .page(f.getPage())
@@ -238,6 +240,9 @@ public class WorkflowService {
 
         String pdfBase64 = Base64.getEncoder().encodeToString(document.getFlattenedPdf());
 
+        int maxOrder = workflow.getSigners().stream().mapToInt(Signer::getOrder).max().orElse(0);
+        boolean isLastSigner = signer.getOrder() == maxOrder;
+
         return SignerDocumentResponse.builder()
                 .workflowId(workflowId)
                 .workflowName(workflow.getName())
@@ -245,6 +250,7 @@ public class WorkflowService {
                 .signerId(signer.getSignerId())
                 .pdfBase64(pdfBase64)
                 .fields(signerFields)
+                .lastSigner(isLastSigner)
                 .build();
     }
 
@@ -283,11 +289,6 @@ public class WorkflowService {
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Workflow introuvable : " + workflowId));
-
-        workflow.getSigners().stream()
-                .filter(s -> s.getSignerId().equals(signerId))
-                .findFirst()
-                .ifPresent(s -> s.setStatus(SignerStatus.FILLED));
 
         workflow.setUpdatedAt(LocalDateTime.now());
         workflowRepository.save(workflow);

@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class FieldDto {
     private String fieldName;
+    private String label;        // libellé lisible affiché au signataire
     private String fieldType;    // "text" | "checkbox" | "radio"
     private String groupName;    // non-null pour les boutons radio
     private int page;

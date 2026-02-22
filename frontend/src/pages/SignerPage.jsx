@@ -3,8 +3,8 @@ import { useParams } from 'react-router-dom'
 import PDFCanvas from '../components/PDFCanvas'
 import FieldOverlay from '../components/FieldOverlay'
 import SignaturePanel from '../components/SignaturePanel'
-import { getSignerDocument, fillAndSign } from '../api/workflowApi'
-import { AlertTriangle, Loader2, FileSignature, CheckCircle } from 'lucide-react'
+import { getSignerDocument, fillAndSign, downloadFinalPdf } from '../api/workflowApi'
+import { AlertTriangle, Loader2, FileSignature, CheckCircle, Download } from 'lucide-react'
 
 export default function SignerPage() {
   const { workflowId, signerId } = useParams()
@@ -158,6 +158,15 @@ export default function SignerPage() {
                 Votre signature a été enregistrée avec succès.
               </p>
             </div>
+            {docData?.lastSigner && (
+              <button
+                onClick={() => downloadFinalPdf(docData.workflowId)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition-colors"
+              >
+                <Download size={15} />
+                Télécharger le document final
+              </button>
+            )}
             <p className="text-xs text-slate-400">Vous pouvez fermer cette page.</p>
           </div>
         </div>

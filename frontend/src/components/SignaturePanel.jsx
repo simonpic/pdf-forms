@@ -27,9 +27,9 @@ function buildDisplayItems(fields, values) {
       seenGroups.add(f.groupName)
       const groupFields = fields.filter((g) => g.fieldType === 'radio' && g.groupName === f.groupName)
       const selected = groupFields.some((g) => (values[g.fieldName] ?? 'false') === 'true')
-      items.push({ key: f.groupName, label: f.groupName, fieldType: 'radio', filled: selected })
+      items.push({ key: f.groupName, label: f.label || f.groupName, fieldType: 'radio', filled: selected })
     } else {
-      items.push({ key: f.fieldName, label: f.fieldName, fieldType, filled: isFieldFilled(f, values) })
+      items.push({ key: f.fieldName, label: f.label || f.fieldName, fieldType, filled: isFieldFilled(f, values) })
     }
   }
 

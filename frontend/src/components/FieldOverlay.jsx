@@ -108,7 +108,7 @@ export default function FieldOverlay({ fields, scale, pageHeightPt, values, onCh
             type="text"
             value={values[field.fieldName] ?? field.currentValue ?? ''}
             onChange={(e) => onChange(field.fieldName, e.target.value)}
-            placeholder="Votre saisie…"
+            placeholder={field.label || 'Votre saisie…'}
             style={{
               position: 'absolute',
               left: cssLeft,
