@@ -1,4 +1,4 @@
-const API_BASE = '/api'
+const API_BASE = "/api";
 
 /**
  * Analyse un PDF et retourne les champs AcroForm existants.
@@ -6,16 +6,16 @@ const API_BASE = '/api'
  * @returns {{ fields: Array }} Liste des champs détectés (coords en points PDF)
  */
 export async function analyzePdf(file) {
-  const formData = new FormData()
-  formData.append('file', file)
+  const formData = new FormData();
+  formData.append("file", file);
 
   const res = await fetch(`${API_BASE}/workflows/analyze-pdf`, {
-    method: 'POST',
+    method: "POST",
     body: formData,
-  })
+  });
 
-  if (!res.ok) throw new Error(`Erreur analyse PDF : ${res.status}`)
-  return res.json()
+  if (!res.ok) throw new Error(`Erreur analyse PDF : ${res.status}`);
+  return res.json();
 }
 
 /**
@@ -24,21 +24,21 @@ export async function analyzePdf(file) {
  * @param {Object} data - { name, signers: [{name, order}], fields: [{...}] }
  */
 export async function createWorkflow(file, data) {
-  const formData = new FormData()
-  formData.append('file', file)
-  formData.append('data', JSON.stringify(data))
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("data", JSON.stringify(data));
 
   const res = await fetch(`${API_BASE}/workflows`, {
-    method: 'POST',
+    method: "POST",
     body: formData,
-  })
+  });
 
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || `Erreur ${res.status}`)
+    const text = await res.text();
+    throw new Error(text || `Erreur ${res.status}`);
   }
 
-  return res.json()
+  return res.json();
 }
 
 /**
@@ -47,64 +47,25 @@ export async function createWorkflow(file, data) {
  * Lance une erreur avec status=403 si ce n'est pas son tour.
  */
 export async function getSignerDocument(workflowId, signerId) {
-  const res = await fetch(`${API_BASE}/workflows/${workflowId}/signer/${encodeURIComponent(signerId)}`)
+  const res = await fetch(
+    `${API_BASE}/workflows/${workflowId}/signer/${encodeURIComponent(signerId)}`,
+  );
 
   if (!res.ok) {
-    const text = await res.text()
-    const error = new Error(text || `Erreur ${res.status}`)
-    error.status = res.status
+    const text = await res.text();
+    const error = new Error(text || `Erreur ${res.status}`);
+    error.status = res.status;
     // Tenter de parser le message JSON Spring Boot
     try {
-      const json = JSON.parse(text)
-      error.message = json.message || json.detail || text
+      const json = JSON.parse(text);
+      error.message = json.message || json.detail || text;
     } catch {
-      error.message = text
+      error.message = text;
     }
-    throw error
+    throw error;
   }
 
-  return res.json()
-}
-
-/**
- * Remplit les champs pour le signataire.
- * @param {string} workflowId
- * @param {string} signerName - Nom brut (sera slugifié côté backend)
- * @param {Object} fields - { fieldName: value }
- */
-export async function fillFields(workflowId, signerName, fields) {
-  const res = await fetch(`${API_BASE}/workflows/${workflowId}/fill`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ signerName, fields }),
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || `Erreur ${res.status}`)
-  }
-
-  return res.json()
-}
-
-/**
- * Signe le document pour le signataire.
- * @param {string} workflowId
- * @param {string} signerName
- */
-export async function signDocument(workflowId, signerName) {
-  const res = await fetch(`${API_BASE}/workflows/${workflowId}/sign`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ signerName }),
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || `Erreur ${res.status}`)
-  }
-
-  return res.json()
+  return res.json();
 }
 
 /**
@@ -115,17 +76,17 @@ export async function signDocument(workflowId, signerName) {
  */
 export async function fillAndSign(workflowId, signerName, fields) {
   const res = await fetch(`${API_BASE}/workflows/${workflowId}/fill-and-sign`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ signerName, fields }),
-  })
+  });
 
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || `Erreur ${res.status}`)
+    const text = await res.text();
+    throw new Error(text || `Erreur ${res.status}`);
   }
 
-  return res.json()
+  return res.json();
 }
 
 /**
@@ -133,5 +94,5 @@ export async function fillAndSign(workflowId, signerName, fields) {
  * @param {string} workflowId
  */
 export function downloadFinalPdf(workflowId) {
-  window.open(`${API_BASE}/workflows/${workflowId}/download`, '_blank')
+  window.open(`${API_BASE}/workflows/${workflowId}/download`, "_blank");
 }

@@ -3,12 +3,13 @@ package com.pdfforms.service;
 import com.pdfforms.dto.AnalyzePdfResponse;
 import com.pdfforms.dto.DetectedFieldDto;
 import com.pdfforms.dto.FieldRequest;
-import com.pdfforms.model.FieldDefinition;
+import com.pdfforms.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -290,52 +291,39 @@ public class PdfBoxService {
      * Utilise PDFBox + BouncyCastle pour générer une signature PKCS#7 détachée.
      *
      * @param masterPdfBytes bytes du PDF master
-     * @param privateKey     clé privée RSA
-     * @param certificate    certificat X509 auto-signé
+     * @param signature signature information
      * @return bytes du PDF master signé (avec l'incrément de signature)
      */
-    public byte[] signPdf(byte[] masterPdfBytes,
-                          PrivateKey privateKey,
-                          X509Certificate certificate,
-                          String signerName, boolean addPerm) throws Exception {
+    public byte[] signPdf(byte[] masterPdfBytes, Signature signature) throws Exception {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
-            PDSignature signature = new PDSignature();
-            signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
-            signature.setSubFilter(PDSignature.SUBFILTER_ADBE_PKCS7_DETACHED);
-            signature.setName("PDF Forms POC %s".formatted(signerName));
-            signature.setReason("Signature %s".formatted(signerName));
-            signature.setSignDate(Calendar.getInstance());
+            PDSignature pdSignature = new PDSignature();
+            pdSignature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
+            pdSignature.setSubFilter(PDSignature.SUBFILTER_ADBE_PKCS7_DETACHED);
+            pdSignature.setName("PDF Forms POC %s".formatted(signature.getSignerName()));
+            pdSignature.setReason("Signature %s".formatted(signature.getSignerName()));
+            pdSignature.setSignDate(Calendar.getInstance());
 
-            if (addPerm) {
-                // Définir les permissions MDP (P=2 : champs AcroForm modifiables)
-                COSDictionary transformParams = new COSDictionary();
-                transformParams.setItem(COSName.TYPE, COSName.getPDFName("TransformParams"));
-                transformParams.setInt(COSName.P, 2); // <-- ici le niveau de permission
-                transformParams.setName(COSName.V, "1.2");
+            if (signature instanceof CertificationSignature certificationSignature) {
+                setFormFillPermission(pdSignature, certificationSignature.getPermissionLevel());
+            }
 
-                COSDictionary reference = new COSDictionary();
-                reference.setItem(COSName.TYPE, COSName.getPDFName("SigRef"));
-                reference.setItem(COSName.getPDFName("TransformMethod"), COSName.getPDFName("DocMDP"));
-                reference.setItem(COSName.getPDFName("TransformParams"), transformParams);
-
-                COSArray referenceArray = new COSArray();
-                referenceArray.add(reference);
-                signature.getCOSObject().setItem(COSName.getPDFName("Reference"), referenceArray);
+            if (signature instanceof ApprovalSignature approvalSignature) {
+                lockFields(pdSignature, approvalSignature.getFieldToLock());
             }
 
             SignatureOptions options = new SignatureOptions();
-            options.setPreferredSignatureSize(0x2500); // ~9Ko réservé pour la signature
+            options.setPreferredSignatureSize(0x2500); // ~9Ko réservé pour la pdSignature
 
             var acroForm = doc.getDocumentCatalog().getAcroForm();
             if (acroForm != null) {
                 acroForm.setNeedAppearances(false);
             }
 
-            doc.addSignature(signature, (InputStream content) -> {
+            doc.addSignature(pdSignature, (InputStream content) -> {
                 try {
-                    return createCmsSignature(content, privateKey, certificate);
+                    return createCmsSignature(content, signature.getPrivateKey(), signature.getCertificate());
                 } catch (Exception e) {
-                    throw new IOException("Échec de la génération de la signature CMS", e);
+                    throw new IOException("Échec de la génération de la pdSignature CMS", e);
                 }
             }, options);
 
@@ -344,6 +332,44 @@ public class PdfBoxService {
             log.info("PDF signé avec saveIncremental ({} bytes).", bos.size());
             return bos.toByteArray();
         }
+    }
+
+    private void setFormFillPermission(PDSignature signature, SignaturePermissionLevel permissionLevel) {
+        // Définir les permissions MDP (P=2 : champs AcroForm modifiables)
+        COSDictionary transformParams = new COSDictionary();
+        transformParams.setItem(COSName.TYPE, COSName.getPDFName("TransformParams"));
+        transformParams.setInt(COSName.P, permissionLevel.getLevel());
+        transformParams.setName(COSName.V, "1.2");
+
+        COSDictionary reference = new COSDictionary();
+        reference.setItem(COSName.TYPE, COSName.getPDFName("SigRef"));
+        reference.setItem(COSName.getPDFName("TransformMethod"), COSName.getPDFName("DocMDP"));
+        reference.setItem(COSName.getPDFName("TransformParams"), transformParams);
+
+        COSArray referenceArray = new COSArray();
+        referenceArray.add(reference);
+        signature.getCOSObject().setItem(COSName.getPDFName("Reference"), referenceArray);
+    }
+
+    private void lockFields(PDSignature signature, List<String> fieldsToLock) {
+        COSDictionary transformParams = new COSDictionary();
+        transformParams.setName(COSName.TYPE, "TransformParams");
+        transformParams.setName(COSName.getPDFName("Action"), "Include");
+        transformParams.setName(COSName.V, "1.2");
+
+        COSArray fields = new COSArray();
+        fieldsToLock.forEach(f -> fields.add(new COSString(f)));
+        transformParams.setItem(COSName.getPDFName("Fields"), fields);
+
+        COSDictionary reference = new COSDictionary();
+        reference.setName(COSName.TYPE, "SigRef");
+        reference.setName(COSName.getPDFName("TransformMethod"), "FieldMDP");
+        reference.setItem(COSName.getPDFName("TransformParams"), transformParams);
+
+        COSArray referenceArray = new COSArray();
+        referenceArray.add(reference);
+
+        signature.getCOSObject().setItem(COSName.getPDFName("Reference"), referenceArray);
     }
 
     /**

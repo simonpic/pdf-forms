@@ -109,8 +109,14 @@ public class WorkflowService {
 
         // 2. Créer le PDF master avec les champs AcroForm
         byte[] masterPdf = pdfBoxService.createMasterPdf(originalPdfBytes, request.getFields());
-        masterPdf = pdfBoxService.signPdf(masterPdf, signingKeyPair.getPrivate(), signingCertificate, "coc_platform",
-                true);
+
+        var certificationSignature = CertificationSignature.builder()
+                .privateKey(signingKeyPair.getPrivate())
+                .certificate(signingCertificate)
+                .signerName("coc_platform")
+                .permissionLevel(SignaturePermissionLevel.FORM_FILL)
+                .build();
+        masterPdf = pdfBoxService.signPdf(masterPdf, certificationSignature);
 
         // 3. Générer le PDF aplati initial (champs vides rendus visuellement)
         byte[] flattenedPdf = pdfBoxService.flattenPdf(masterPdf);
@@ -248,7 +254,7 @@ public class WorkflowService {
      * Applique les valeurs de champs dans le master PDF.
      * Vérifie que chaque champ appartient au signataire via /Assign.
      */
-    public void fillFields(String workflowId, FillRequest request) throws Exception {
+    public List<FieldDefinition> fillFields(String workflowId, FillRequest request) throws Exception {
         String signerId = slugify(request.getSignerName());
         log.info("Remplissage des champs par signerId='{}' pour workflowId={}.", signerId, workflowId);
 
@@ -270,13 +276,6 @@ public class WorkflowService {
         byte[] updatedMaster = pdfBoxService.applyFieldValues(
                 document.getMasterPdf(), updatedFields);
 
-        // Mettre à jour les valeurs en base MongoDB
-        document.getFields().forEach(field -> {
-            if (request.getFields().containsKey(field.getFieldName())) {
-                field.setCurrentValue(request.getFields().get(field.getFieldName()));
-            }
-        });
-
         document.setMasterPdf(updatedMaster);
         document.setFlattenedStale(true);
         documentRepository.save(document);
@@ -290,6 +289,7 @@ public class WorkflowService {
         workflowRepository.save(workflow);
 
         log.info("Champs remplis par '{}' : {}", signerId, request.getFields().keySet());
+        return updatedFields;
     }
 
     /**
@@ -297,18 +297,20 @@ public class WorkflowService {
      * Appelle fillFields puis signDocument séquentiellement.
      */
     public Map<String, Object> fillAndSign(String workflowId, FillAndSignRequest request) throws Exception {
+        List<FieldDefinition> updateFields = List.of();
+
         // Étape 1 — remplir les champs (si la map n'est pas vide)
         if (request.getFields() != null && !request.getFields().isEmpty()) {
             FillRequest fillRequest = new FillRequest();
             fillRequest.setSignerName(request.getSignerName());
             fillRequest.setFields(request.getFields());
-            fillFields(workflowId, fillRequest);
+            updateFields = fillFields(workflowId, fillRequest);
         }
 
         // Étape 2 — signer
         SignRequest signRequest = new SignRequest();
         signRequest.setSignerName(request.getSignerName());
-        return signDocument(workflowId, signRequest);
+        return signDocument(workflowId, signRequest, updateFields);
     }
 
     /**
@@ -316,7 +318,8 @@ public class WorkflowService {
      * Fait avancer currentSignerOrder.
      * Si c'était le dernier signataire, passe le workflow en COMPLETED.
      */
-    public Map<String, Object> signDocument(String workflowId, SignRequest request) throws Exception {
+    public Map<String, Object> signDocument(String workflowId, SignRequest request,
+                                            List<FieldDefinition> updatedFields) throws Exception {
         String signerId = slugify(request.getSignerName());
         log.info("Signature par signerId='{}' pour workflowId={}.", signerId, workflowId);
 
@@ -344,13 +347,15 @@ public class WorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Document introuvable."));
 
-        byte[] signedPdf = pdfBoxService.signPdf(
-                document.getMasterPdf(),
-                signingKeyPair.getPrivate(),
-                signingCertificate,
-                signer.getSignerId(),
-                false
-        );
+        List<String> fieldsToLock = updatedFields.stream().map(FieldDefinition::getFieldName).toList();
+        var approvalSignature = ApprovalSignature.builder()
+                .privateKey(signingKeyPair.getPrivate())
+                .certificate(signingCertificate)
+                .signerName("coc_platform")
+                .fieldToLock(fieldsToLock)
+                .build();
+
+        byte[] signedPdf = pdfBoxService.signPdf(document.getMasterPdf(), approvalSignature);
 
         document.setMasterPdf(signedPdf);
         document.setFlattenedStale(true);
