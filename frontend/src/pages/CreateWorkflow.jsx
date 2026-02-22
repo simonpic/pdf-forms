@@ -25,7 +25,7 @@ export default function CreateWorkflow() {
   const [pdfFile, setPdfFile] = useState(null)
   const [pdfData, setPdfData] = useState(null)
   const [dragging, setDragging] = useState(false)
-  const [pageInfo, setPageInfo] = useState(null)
+  const [pagesInfo, setPagesInfo] = useState(null)
   const [importedFieldsPdf, setImportedFieldsPdf] = useState(null)
   const [workflowName, setWorkflowName] = useState('')
   const [signers, setSigners] = useState([])
@@ -44,7 +44,7 @@ export default function CreateWorkflow() {
     }
     setPdfFile(file)
     setFields([])
-    setPageInfo(null)
+    setPagesInfo(null)
     setImportedFieldsPdf(null)
     setResult(null)
 
@@ -82,31 +82,34 @@ export default function CreateWorkflow() {
     setFields((prev) => prev.map((f, i) => i === index ? { ...f, ...updates } : f))
   }, [])
 
-  // Conversion coords PDF → canvas une fois que scale est disponible
+  // Conversion coords PDF → canvas une fois que toutes les pages sont chargées
   useEffect(() => {
-    if (!pageInfo || !importedFieldsPdf || importedFieldsPdf.length === 0) return
-    const { scale, pageHeightPt } = pageInfo
-    const converted = importedFieldsPdf.map((f) => ({
-      fieldType: f.fieldType,
-      fieldName: f.fieldName,
-      assignedTo: '',
-      signerName: null,
-      signerIndex: -1,
-      page: f.page,
-      x: f.x,
-      y: f.y,
-      width: f.width,
-      height: f.height,
-      ...(f.groupName ? { groupName: f.groupName } : {}),
-      canvasRect: {
-        x: f.x * scale,
-        y: (pageHeightPt - f.y - f.height) * scale,
-        width: f.width * scale,
-        height: f.height * scale,
-      },
-    }))
+    if (!pagesInfo || !importedFieldsPdf || importedFieldsPdf.length === 0) return
+    const converted = importedFieldsPdf.map((f) => {
+      const info = pagesInfo[f.page] ?? pagesInfo[0]
+      const { scale, pageHeightPt } = info
+      return {
+        fieldType: f.fieldType,
+        fieldName: f.fieldName,
+        assignedTo: '',
+        signerName: null,
+        signerIndex: -1,
+        page: f.page,
+        x: f.x,
+        y: f.y,
+        width: f.width,
+        height: f.height,
+        ...(f.groupName ? { groupName: f.groupName } : {}),
+        canvasRect: {
+          x: f.x * scale,
+          y: (pageHeightPt - f.y - f.height) * scale,
+          width: f.width * scale,
+          height: f.height * scale,
+        },
+      }
+    })
     setFields(converted)
-  }, [pageInfo, importedFieldsPdf])
+  }, [pagesInfo, importedFieldsPdf])
 
   const handleFieldRemoved = (index) => {
     setFields((prev) => prev.filter((_, i) => i !== index))
@@ -171,7 +174,7 @@ export default function CreateWorkflow() {
               <FileText size={14} className="text-indigo-500 shrink-0" />
               <span className="font-medium max-w-56 truncate">{pdfFile?.name}</span>
               <button
-                onClick={() => { setPdfFile(null); setPdfData(null); setFields([]); setPageInfo(null); setImportedFieldsPdf(null) }}
+                onClick={() => { setPdfFile(null); setPdfData(null); setFields([]); setPagesInfo(null); setImportedFieldsPdf(null) }}
                 className="text-slate-400 hover:text-red-500 ml-1 shrink-0"
                 title="Retirer le PDF"
               >
@@ -234,26 +237,22 @@ export default function CreateWorkflow() {
             <div className="flex flex-col items-center gap-3">
               <PDFCanvas
                 pdfData={pdfData}
-                onPageInfo={setPageInfo}
-                overlay={
-                  pageInfo ? (
-                    <FieldDrawingLayer
-                      scale={pageInfo.scale}
-                      pageHeightPt={pageInfo.pageHeightPt}
-                      signers={signers}
-                      fields={fields}
-                      onFieldAdded={handleFieldAdded}
-                      onFieldReassigned={handleFieldReassigned}
-                      onFieldMoved={handleFieldMoved}
-                      onFieldRemoved={handleFieldRemoved}
-                      activeTool={activeTool}
-                    />
-                  ) : null
-                }
+                onPagesInfo={setPagesInfo}
+                renderOverlay={(pageIndex, pageInfo) => (
+                  <FieldDrawingLayer
+                    currentPage={pageIndex}
+                    scale={pageInfo.scale}
+                    pageHeightPt={pageInfo.pageHeightPt}
+                    signers={signers}
+                    fields={fields}
+                    onFieldAdded={handleFieldAdded}
+                    onFieldReassigned={handleFieldReassigned}
+                    onFieldMoved={handleFieldMoved}
+                    onFieldRemoved={handleFieldRemoved}
+                    activeTool={activeTool}
+                  />
+                )}
               />
-              {!pageInfo && (
-                <p className="text-xs text-slate-400">Chargement du PDF…</p>
-              )}
             </div>
           )}
         </div>

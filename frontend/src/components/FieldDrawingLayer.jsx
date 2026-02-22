@@ -37,6 +37,7 @@ const HANDLE_SIZE = 14
 export default function FieldDrawingLayer({
   scale,
   pageHeightPt,
+  currentPage = 0,
   signers,
   fields,
   onFieldAdded,
@@ -83,6 +84,7 @@ export default function FieldDrawingLayer({
 
     // 1. Poignée de drag (checkbox/radio) — priorité max
     for (let i = fields.length - 1; i >= 0; i--) {
+      if (fields[i].page !== currentPage) continue
       if (fields[i].fieldType !== 'text' && isInHandleZone(fields[i], pos)) {
         setDragState({ fieldIndex: i, startPos: pos, startCanvasRect: { ...fields[i].canvasRect }, isActive: false })
         setHoveredFieldIndex(-1)
@@ -91,7 +93,7 @@ export default function FieldDrawingLayer({
     }
 
     // 2. Corps d'un champ existant
-    const hitIndex = getFieldAtPos(fields, pos)
+    const hitIndex = getFieldAtPos(fields, pos, currentPage)
     if (hitIndex !== -1) {
       const field = fields[hitIndex]
       if (field.fieldType === 'text') {
@@ -132,7 +134,7 @@ export default function FieldDrawingLayer({
 
     // Hover detection
     if (!drawing && !showPopup) {
-      setHoveredFieldIndex(getFieldAtPos(fields, pos))
+      setHoveredFieldIndex(getFieldAtPos(fields, pos, currentPage))
     }
 
     // Dessin texte
@@ -232,7 +234,7 @@ export default function FieldDrawingLayer({
         assignedTo: signer ? signer.signerId : '',
         signerName: signer ? signer.name : null,
         signerIndex: signer ? index : -1,
-        page: 0,
+        page: currentPage,
         x: Math.round(pdfX * 100) / 100,
         y: Math.round(pdfY * 100) / 100,
         width: Math.round(pdfWidth * 100) / 100,
@@ -292,6 +294,7 @@ export default function FieldDrawingLayer({
     >
       {/* Champs déjà placés */}
       {fields.map((field, i) => {
+        if (field.page !== currentPage) return null
         const isDragged = dragState?.isActive && dragState.fieldIndex === i
         const rect = isDragged
           ? {
@@ -506,8 +509,9 @@ function isInHandleZone(field, pos) {
   )
 }
 
-function getFieldAtPos(fields, pos) {
+function getFieldAtPos(fields, pos, currentPage = 0) {
   for (let i = fields.length - 1; i >= 0; i--) {
+    if (fields[i].page !== currentPage) continue
     const { canvasRect, fieldType } = fields[i]
     // Inclure la zone de poignée dans la détection du hover
     if (fieldType !== 'text' && isInHandleZone(fields[i], pos)) return i

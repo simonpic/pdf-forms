@@ -13,7 +13,6 @@ export default function SignerPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [docData, setDocData] = useState(null)
   const [pdfData, setPdfData] = useState(null)
-  const [pageInfo, setPageInfo] = useState(null)
   const [fieldValues, setFieldValues] = useState({})
 
   useEffect(() => {
@@ -158,18 +157,19 @@ export default function SignerPage() {
               </p>
               <PDFCanvas
                 pdfData={pdfData}
-                onPageInfo={setPageInfo}
-                overlay={
-                  pageInfo && fields.length > 0 ? (
+                renderOverlay={(pageIndex, pageInfo) => {
+                  const pageFields = fields.filter((f) => f.page === pageIndex)
+                  if (pageFields.length === 0) return null
+                  return (
                     <FieldOverlay
-                      fields={fields}
+                      fields={pageFields}
                       scale={pageInfo.scale}
                       pageHeightPt={pageInfo.pageHeightPt}
                       values={fieldValues}
                       onChange={handleFieldChange}
                     />
-                  ) : null
-                }
+                  )
+                }}
               />
             </div>
           ) : (
