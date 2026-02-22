@@ -199,11 +199,6 @@ export default function SignerPage() {
         <div className="flex-1 overflow-auto bg-slate-100 flex items-start justify-center p-2">
           {pdfData ? (
             <div className="flex flex-col items-center gap-3">
-              <p className="text-xs text-slate-500 bg-white px-4 py-2 rounded-full border border-indigo-100 shadow-sm font-medium">
-                {fields.length > 0
-                  ? 'Remplissez les champs mis en évidence dans le document, puis signez.'
-                  : 'Consultez le document ci-dessous, puis signez.'}
-              </p>
               <PDFCanvas
                 pdfData={pdfData}
                 renderOverlay={(pageIndex, pageInfo) => {
@@ -230,12 +225,13 @@ export default function SignerPage() {
         </div>
 
         {/* Panneau droit — signature */}
-        <div className="w-80 bg-white border-l border-slate-200 overflow-y-auto p-4">
+        <div className="w-80 bg-white border-l border-slate-200 flex flex-col">
           <SignaturePanel
             fields={fields}
             values={fieldValues}
             signerName={docData?.signerName ?? signerId}
             workflowName={docData?.workflowName}
+            signers={docData?.signers}
             onFillAndSign={handleFillAndSign}
           />
         </div>

@@ -241,6 +241,25 @@ public class WorkflowService {
         int maxOrder = workflow.getSigners().stream().mapToInt(Signer::getOrder).max().orElse(0);
         boolean isLastSigner = signer.getOrder() == maxOrder;
 
+        List<SignerDocumentResponse.SignerContext> signerContexts = workflow.getSigners().stream()
+                .sorted(Comparator.comparingInt(Signer::getOrder))
+                .map(s -> {
+                    String status;
+                    if (s.getSignerId().equals(signerId)) {
+                        status = "CURRENT";
+                    } else if (s.getStatus() == SignerStatus.SIGNED) {
+                        status = "SIGNED";
+                    } else {
+                        status = "PENDING";
+                    }
+                    return SignerDocumentResponse.SignerContext.builder()
+                            .name(s.getName())
+                            .order(s.getOrder())
+                            .status(status)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
         return SignerDocumentResponse.builder()
                 .workflowId(workflowId)
                 .workflowName(workflow.getName())
@@ -249,6 +268,7 @@ public class WorkflowService {
                 .pdfBase64(pdfBase64)
                 .fields(signerFields)
                 .lastSigner(isLastSigner)
+                .signers(signerContexts)
                 .build();
     }
 

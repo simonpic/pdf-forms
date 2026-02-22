@@ -4,6 +4,7 @@ import { Button } from './ui/button'
 import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
 import { PenLine, AlertCircle, Type, SquareCheck, CircleDot, ShieldCheck } from 'lucide-react'
+import SignerSequence from './SignerSequence'
 
 // Calcule si un champ individuel est "rempli" selon son type
 function isFieldFilled(f, values) {
@@ -42,7 +43,7 @@ const TYPE_ICON = {
   radio:    { Icon: CircleDot,   color: 'text-amber-400' },
 }
 
-export default function SignaturePanel({ fields, values, signerName, workflowName, onFillAndSign }) {
+export default function SignaturePanel({ fields, values, signerName, workflowName, signers, onFillAndSign }) {
   const [error, setError]     = useState(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen]       = useState(false)
@@ -63,34 +64,14 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
     }
   }
 
-  const buttonAndError = (
-    <div className="space-y-4">
-      {/* Erreur */}
-      {error && (
-        <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-          <AlertCircle size={16} className="shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Bouton principal */}
-      <Button
-        className="w-full bg-indigo-500 hover:bg-indigo-600"
-        disabled={loading}
-        onClick={() => setOpen(true)}
-      >
-        <PenLine size={16} />
-        {loading ? 'Signature en cours…' : 'Signer le document'}
-      </Button>
-    </div>
-  )
-
   return (
     <>
-      {hasFields ? (
-        <Card>
-          <CardContent className="space-y-4 pt-4">
-            <div className="space-y-2">
+      {/* Zone scrollable — contexte + card des champs */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <SignerSequence signers={signers} />
+        {hasFields && (
+          <Card>
+            <CardContent className="space-y-2 pt-4 pb-3">
               <p className="text-sm text-slate-600 font-medium">Vos champs à remplir :</p>
               {displayItems.map((item) => {
                 const meta = TYPE_ICON[item.fieldType] ?? TYPE_ICON.text
@@ -108,13 +89,28 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
                   </div>
                 )
               })}
-            </div>
-            {buttonAndError}
-          </CardContent>
-        </Card>
-      ) : (
-        buttonAndError
-      )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Footer fixe — bouton de signature */}
+      <div className="border-t border-slate-200 p-4 space-y-3">
+        {error && (
+          <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+        <Button
+          className="w-full bg-indigo-500 hover:bg-indigo-600"
+          disabled={loading}
+          onClick={() => setOpen(true)}
+        >
+          <PenLine size={16} />
+          {loading ? 'Signature en cours…' : 'Signer le document'}
+        </Button>
+      </div>
 
       {/* Modale de confirmation */}
       <Dialog.Root open={open} onOpenChange={setOpen}>
