@@ -7,10 +7,13 @@ import com.pdfforms.service.WorkflowService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+
+import java.nio.charset.StandardCharsets;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -117,6 +120,9 @@ public class WorkflowController {
         String fileName = workflowService.downloadFinalPdf(workflowId, response.getOutputStream());
 
         response.addHeader(HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"" + fileName + "\"");
+                ContentDisposition.attachment()
+                        .filename(fileName, StandardCharsets.UTF_8)
+                        .build()
+                        .toString());
     }
 }

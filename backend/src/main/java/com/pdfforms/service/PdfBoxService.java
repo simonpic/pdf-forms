@@ -234,10 +234,10 @@ public class PdfBoxService {
 
     /**
      * Applique les valeurs de champs dans le PDF master.
-     * Vérifie que chaque champ appartient bien au signataire attendu via /Assign.
+     * Le contrôle d'ownership est effectué en amont par WorkflowService (source : MongoDB).
      *
      * @param masterPdfBytes bytes du PDF master
-     * @param fields         fields definitions to update
+     * @param fields         champs à mettre à jour (appartiennent tous au même signataire)
      * @return bytes du PDF master mis à jour
      */
     public byte[] applyFieldValues(byte[] masterPdfBytes,
