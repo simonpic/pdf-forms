@@ -1,0 +1,163 @@
+Software Architect — Review de l'application pdf-forms
+========================================================
+
+Architecture globale
+--------------------
+La structure en trois couches (Controller -> Service -> Repository) est propre et lisible.
+La séparation entre WorkflowService (orchestration) et PdfBoxService (opérations PDF pures)
+est une bonne décision. Les DTOs sont correctement séparés du modèle domaine.
+C'est une base saine pour un POC.
+
+
+=== RISQUES D'INTÉGRITÉ DES DONNÉES ===
+
+[1] CRITIQUE — Aucune atomicité entre les deux saves dans createWorkflow
+-------------------------------------------------------------------------
+WorkflowService.java:136-162 — La création fait deux saves distincts :
+
+  workflow = workflowRepository.save(workflow);    // (1)
+  // ... construction du document ...
+  documentRepository.save(document);               // (2)
+
+Si le serveur crashe ou si MongoDB retourne une erreur entre (1) et (2), il existe un
+Workflow en base sans WorkflowDocument associé. Tout accès ultérieur à ce workflow
+provoquera une INTERNAL_SERVER_ERROR non récupérable.
+
+Même problème dans fillAndSign : fillFields fait un premier save, puis signDocument en
+fait un second. L'état intermédiaire (champs remplis, signature non appliquée) est visible
+dans MongoDB pendant quelques millisecondes.
+
+MongoDB supporte les transactions multi-documents depuis la version 4.0 (avec replica set).
+Pour un POC sur instance standalone c'est acceptable, mais c'est à documenter comme dette.
+
+
+[2] CRITIQUE — Les PDFs sont stockés dans des documents MongoDB — limite 16 MB
+-------------------------------------------------------------------------------
+WorkflowDocument.java — masterPdf et flattenedPdf sont des byte[] stockés dans le même
+document MongoDB. Un document MongoDB est limité à 16 MB. Avec un PDF complexe, deux copies
+(master + flattened) plus les métadonnées des champs, cette limite est atteignable.
+
+Le bon pattern pour des binaires lourds avec MongoDB est GridFS. Cela résoudrait aussi le
+fait que WorkflowDocument est chargé entier en mémoire à chaque accès, même quand on ne
+consulte que les métadonnées des champs.
+
+
+=== PROBLÈMES DE CONCEPTION ===
+
+[3] IMPORTANT — WorkflowService cumule trop de responsabilités (414 lignes)
+----------------------------------------------------------------------------
+Le service gère : la création de workflow, la liste avec mapping DTO, le contrôle des tours
+de signataires, la coordination avec PDFBox, le remplissage de champs, la signature, le
+téléchargement. C'est un God Service.
+
+Une découpe naturelle serait :
+
+  WorkflowService   → cycle de vie + liste
+  SignerService     → gestion des tours, getDocumentForSigner
+  SigningService    → fillFields, signDocument, fillAndSign
+  DocumentService   → flattenedPdf management, download
+
+Pour un POC ça reste acceptable, mais avant d'ajouter des features (notifications,
+annulation, audit log…) ce refactoring devient urgent.
+
+
+[4] IMPORTANT — signDocument retourne Map<String, Object> non typé
+------------------------------------------------------------------
+WorkflowService.java:323 et WorkflowController.java:99 — Le retour de fillAndSign et
+signDocument est un Map<String, Object>. C'est une régression de type safety : le
+compilateur ne peut pas vérifier la structure, les clés sont des littéraux non contrôlés,
+et le frontend reçoit un JSON non documenté.
+
+Il faudrait un DTO dédié :
+
+  public record SignResult(boolean success, String workflowStatus, boolean completed) {}
+
+
+[5] IMPORTANT — signDocument recharge le document depuis MongoDB après fillFields
+----------------------------------------------------------------------------------
+WorkflowService.java:301-315 — Dans fillAndSign :
+
+  updateFields = fillFields(workflowId, fillRequest);   // save -> DB
+  signDocument(workflowId, signRequest, updateFields);  // findByWorkflowId -> DB
+
+fillFields sauve le document modifié, puis signDocument le recharge immédiatement.
+C'est deux allers-retours MongoDB pour travailler sur la même entité. L'objet pourrait
+être passé directement entre les deux méthodes.
+
+
+[6] IMPORTANT — Le statut DRAFT existe dans l'enum mais n'est jamais utilisé
+-----------------------------------------------------------------------------
+WorkflowStatus.java — L'enum déclare DRAFT, IN_PROGRESS, COMPLETED. Un workflow est créé
+directement en IN_PROGRESS. Si l'instrumentant veut visualiser et corriger ses champs avant
+de lancer le workflow, DRAFT serait utile — mais l'état est dead code aujourd'hui.
+À supprimer ou à implémenter.
+
+
+[7] IMPORTANT — signerId = slug : collision possible et non opaque
+------------------------------------------------------------------
+WorkflowService.java:37-46 — "Jean-Pierre Dupont" et "Jean Pierre Dupont" produisent le
+même slug "jean-pierre-dupont". Si deux signataires d'un même workflow ont des noms voisins
+qui produisent le même slug, le second écrase silencieusement le premier dans la liste
+(pas de vérification de doublon).
+
+Plus fondamentalement, un UUID v4 aléatoire serait plus robuste pour des URLs de signature
+— moins énumérable, plus opaque.
+
+
+=== DETTE TECHNIQUE ET MAINTENABILITÉ ===
+
+[8] MINEUR — Pas de @ControllerAdvice — les erreurs 500 peuvent fuiter des stack traces
+----------------------------------------------------------------------------------------
+Il n'y a pas de gestionnaire d'exception global. Une exception non prévue (NPE, IOException
+hors des cas gérés) remontera en 500 avec potentiellement une stack trace Java dans la
+réponse HTTP. Il faudrait un @RestControllerAdvice qui normalise la forme des erreurs et
+log les exceptions inattendues.
+
+
+[9] MINEUR — listWorkflows() charge tout en mémoire, sans pagination
+--------------------------------------------------------------------
+WorkflowService.java:55-60 — workflowRepository.findAll() charge tous les workflows, puis
+trie en Java. L'absence de pagination est un choix à documenter.
+
+
+[10] MINEUR — Le logging en DEBUG pour com.pdfforms en config de prod
+----------------------------------------------------------------------
+application.yml — com.pdfforms: DEBUG est la config actuelle. En DEBUG, des noms de
+signataires, des field names et des valeurs de champs peuvent apparaître dans les logs.
+Pour un contexte de production avec des documents sensibles, passer en INFO avec des logs
+métier explicites.
+
+
+[11] MINEUR — flattenPdf silencieux si l'AcroForm est null
+-----------------------------------------------------------
+PdfBoxService.java:221-227 :
+
+  if (acroForm != null) {
+      acroForm.flatten();
+  }
+  // Si acroForm == null -> doc.save() sans rien faire, silencieux
+
+Sur un masterPdf qui devrait toujours avoir un AcroForm (c'est son invariant), un null
+indique une corruption. Ce cas devrait lever une exception explicite plutôt que produire
+silencieusement un PDF non aplati.
+
+
+=== RÉCAPITULATIF ===
+
+  #   Sévérité   Catégorie         Problème
+  --  ---------  ----------------  -------------------------------------------------------
+  1   CRITIQUE   Intégrité         Pas d'atomicité entre les deux saves (create + fill-and-sign)
+  2   CRITIQUE   Scalabilité       PDFs stockés en byte[] dans MongoDB — limite 16 MB
+  3   IMPORTANT  Conception        WorkflowService trop large — candidat au découpage
+  4   IMPORTANT  Type safety       Map<String, Object> comme retour de signDocument
+  5   IMPORTANT  Performance       Double aller-retour MongoDB dans fillAndSign
+  6   IMPORTANT  Dead code         DRAFT déclaré mais jamais utilisé
+  7   IMPORTANT  Robustesse        Slug collision possible, signerId énumérable
+  8   MINEUR     Maintenabilité    Pas de @ControllerAdvice pour les erreurs globales
+  9   MINEUR     Scalabilité       Pas de pagination sur listWorkflows()
+  10  MINEUR     Sécurité          Log level DEBUG en configuration de prod
+  11  MINEUR     Robustesse        flattenPdf silencieux si AcroForm null
+
+Priorités concrètes pour une mise en production : point 2 (GridFS pour les PDFs) et
+point 1 (stratégie d'atomicité, au minimum une compensation en cas d'échec partiel).
+Les autres sont de la dette gérable à moyen terme.
