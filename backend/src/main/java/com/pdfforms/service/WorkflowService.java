@@ -28,10 +28,6 @@ public class WorkflowService {
     private final KeyPair signingKeyPair;
     private final X509Certificate signingCertificate;
 
-    // -------------------------------------------------------------------------
-    // Création du workflow
-    // -------------------------------------------------------------------------
-
     /**
      * Convertit un nom en slug URL-safe.
      * Ex : "Jean Dupont" → "jean-dupont", "Signataire A" → "signataire-a"
@@ -91,10 +87,6 @@ public class WorkflowService {
                 .signers(signerSummaries)
                 .build();
     }
-
-    // -------------------------------------------------------------------------
-    // Récupération du document pour un signataire
-    // -------------------------------------------------------------------------
 
     public WorkflowCreateResponse createWorkflow(byte[] originalPdfBytes,
                                                  WorkflowCreateRequest request,
@@ -177,10 +169,6 @@ public class WorkflowService {
                 .build();
     }
 
-    // -------------------------------------------------------------------------
-    // Remplissage des champs
-    // -------------------------------------------------------------------------
-
     /**
      * Retourne le document pour le signataire si c'est bien son tour.
      * Récupère directement le workflow par workflowId (O(1) vs scan complet).
@@ -254,10 +242,6 @@ public class WorkflowService {
                 .build();
     }
 
-    // -------------------------------------------------------------------------
-    // Signature
-    // -------------------------------------------------------------------------
-
     /**
      * Applique les valeurs de champs dans le master PDF.
      * Vérifie que chaque champ appartient au signataire via /Assign.
@@ -270,9 +254,19 @@ public class WorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Document introuvable pour workflowId=" + workflowId));
 
+
+        List<FieldDefinition> updatedFields = document.getFields().stream()
+                .filter(field -> signerId.equals(field.getAssignedTo()))
+                .filter(field -> request.getFields().containsKey(field.getFieldName()))
+                .toList();
+
+        log.info("Update {} fields for {} in request", updatedFields.size(), request.getFields().size());
+
+        updatedFields.forEach(field -> field.setCurrentValue(request.getFields().get(field.getFieldName())));
+
         // Mettre à jour le PDF master
         byte[] updatedMaster = pdfBoxService.applyFieldValues(
-                document.getMasterPdf(), request.getFields(), signerId);
+                document.getMasterPdf(), updatedFields);
 
         // Mettre à jour les valeurs en base MongoDB
         document.getFields().forEach(field -> {
@@ -314,10 +308,6 @@ public class WorkflowService {
         signRequest.setSignerName(request.getSignerName());
         return signDocument(workflowId, signRequest);
     }
-
-    // -------------------------------------------------------------------------
-    // Téléchargement du PDF final
-    // -------------------------------------------------------------------------
 
     /**
      * Signe le PDF master de manière incrémentale.
@@ -399,10 +389,6 @@ public class WorkflowService {
         result.put("completed", isLast);
         return result;
     }
-
-    // -------------------------------------------------------------------------
-    // Utilitaire de slugification
-    // -------------------------------------------------------------------------
 
     /**
      * Retourne le PDF master final, disponible uniquement si status == COMPLETED.

@@ -3,6 +3,7 @@ package com.pdfforms.service;
 import com.pdfforms.dto.AnalyzePdfResponse;
 import com.pdfforms.dto.DetectedFieldDto;
 import com.pdfforms.dto.FieldRequest;
+import com.pdfforms.model.FieldDefinition;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSArray;
@@ -11,15 +12,12 @@ import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
-import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
-import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.SignatureOptions;
 import org.apache.pdfbox.pdmodel.interactive.form.*;
@@ -35,20 +33,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
-import java.text.Normalizer;
-import java.text.SimpleDateFormat;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -122,8 +112,8 @@ public class PdfBoxService {
     }
 
     private String detectFieldType(PDField field) {
-        if (field instanceof PDTextField)  return "text";
-        if (field instanceof PDCheckBox)   return "checkbox";
+        if (field instanceof PDTextField) return "text";
+        if (field instanceof PDCheckBox) return "checkbox";
         if (field instanceof PDRadioButton) return "radio";
         return null; // PDComboBox, PDListBox, PDSignatureField → ignorés
     }
@@ -245,14 +235,12 @@ public class PdfBoxService {
      * Applique les valeurs de champs dans le PDF master.
      * Vérifie que chaque champ appartient bien au signataire attendu via /Assign.
      *
-     * @param masterPdfBytes   bytes du PDF master
-     * @param fieldValues      map fieldName -> valeur
-     * @param expectedSignerId signerId du signataire autorisé
+     * @param masterPdfBytes bytes du PDF master
+     * @param fields         fields definitions to update
      * @return bytes du PDF master mis à jour
      */
     public byte[] applyFieldValues(byte[] masterPdfBytes,
-                                   Map<String, String> fieldValues,
-                                   String expectedSignerId) throws IOException {
+                                   List<FieldDefinition> fields) throws IOException {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
             PDAcroForm acroForm = doc.getDocumentCatalog().getAcroForm();
             if (acroForm == null) {
@@ -260,21 +248,14 @@ public class PdfBoxService {
                         "Aucun AcroForm dans le PDF master.");
             }
 
-            for (Map.Entry<String, String> entry : fieldValues.entrySet()) {
-                String fieldName = entry.getKey();
-                String value = entry.getValue();
+            for (FieldDefinition fieldDef : fields) {
+                String fieldName = fieldDef.getFieldName();
+                String value = fieldDef.getCurrentValue();
 
                 PDField field = acroForm.getField(fieldName);
                 if (field == null) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Champ introuvable : " + fieldName);
-                }
-
-                // Vérifier via /Assign que ce champ appartient au signataire
-                String assignedTo = field.getCOSObject().getString(COSName.getPDFName("Assign"));
-                if (!expectedSignerId.equals(assignedTo)) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                            "Le champ '" + fieldName + "' n'est pas assigné à ce signataire.");
                 }
 
                 if (field instanceof PDTextField textField) {
