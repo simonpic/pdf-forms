@@ -32,6 +32,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
@@ -233,69 +234,69 @@ public class PdfBoxService {
     }
 
     /**
-     * Applique les valeurs de champs dans le PDF master.
+     * Applique les valeurs de champs sur un PDDocument ouvert.
      * Le contrôle d'ownership est effectué en amont par WorkflowService (source : MongoDB).
+     * Les streams d'apparence (/AP) sont générés immédiatement par PDFBox à chaque setValue().
      *
-     * @param masterPdfBytes bytes du PDF master
-     * @param fields         champs à mettre à jour (appartiennent tous au même signataire)
-     * @return bytes du PDF master mis à jour
+     * @param doc    document ouvert sur lequel appliquer les valeurs
+     * @param fields champs à mettre à jour (appartiennent tous au même signataire)
      */
-    public byte[] applyFieldValues(byte[] masterPdfBytes,
-                                   List<FieldDefinition> fields) throws IOException {
-        try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
-            PDAcroForm acroForm = doc.getDocumentCatalog().getAcroForm();
-            if (acroForm == null) {
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Aucun AcroForm dans le PDF master.");
+    private void applyFieldValues(PDDocument doc,
+                                  List<FieldDefinition> fields) throws IOException {
+        PDAcroForm acroForm = doc.getDocumentCatalog().getAcroForm();
+        if (acroForm == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Aucun AcroForm dans le PDF master.");
+        }
+
+        for (FieldDefinition fieldDef : fields) {
+            String fieldName = fieldDef.getFieldName();
+            String value = fieldDef.getCurrentValue();
+
+            PDField field = acroForm.getField(fieldName);
+            if (field == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Champ introuvable : " + fieldName);
             }
 
-            for (FieldDefinition fieldDef : fields) {
-                String fieldName = fieldDef.getFieldName();
-                String value = fieldDef.getCurrentValue();
+            if (field instanceof PDTextField textField) {
+                // Lire le type stocké dans le COSObject pour savoir comment convertir la valeur
+                String storedFieldType = field.getCOSObject()
+                        .getString(COSName.getPDFName("FieldType"));
+                boolean isToggle = "checkbox".equals(storedFieldType)
+                        || "radio".equals(storedFieldType);
 
-                PDField field = acroForm.getField(fieldName);
-                if (field == null) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Champ introuvable : " + fieldName);
+                if (isToggle) {
+                    // "true" → "X" (visible dans tous les viewers PDF)
+                    // "false" → "" (champ vide, non sélectionné)
+                    boolean checked = "true".equalsIgnoreCase(value);
+                    textField.setValue(checked ? "X" : "");
+                    log.debug("Champ toggle appliqué : {} ({}) = {}", fieldName, storedFieldType, checked);
+                } else {
+                    textField.setValue(value);
+                    log.debug("Valeur texte appliquée : {} = '{}'", fieldName, value);
                 }
-
-                if (field instanceof PDTextField textField) {
-                    // Lire le type stocké dans le COSObject pour savoir comment convertir la valeur
-                    String storedFieldType = field.getCOSObject()
-                            .getString(COSName.getPDFName("FieldType"));
-                    boolean isToggle = "checkbox".equals(storedFieldType)
-                            || "radio".equals(storedFieldType);
-
-                    if (isToggle) {
-                        // "true" → "X" (visible dans tous les viewers PDF)
-                        // "false" → "" (champ vide, non sélectionné)
-                        boolean checked = "true".equalsIgnoreCase(value);
-                        textField.setValue(checked ? "X" : "");
-                        log.debug("Champ toggle appliqué : {} ({}) = {}", fieldName, storedFieldType, checked);
-                    } else {
-                        textField.setValue(value);
-                        log.debug("Valeur texte appliquée : {} = '{}'", fieldName, value);
-                    }
-                    textField.setReadOnly(true);
-                }
+                textField.setReadOnly(true);
             }
-
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            doc.saveIncremental(bos);
-            return bos.toByteArray();
         }
     }
 
     /**
-     * Signe le PDF master de manière incrémentale avec le certificat de l'application.
+     * Remplit les champs AcroForm et signe le PDF en une seule passe saveIncremental.
+     * Si {@code fields} est vide ou null, seule la signature est ajoutée.
      * Utilise PDFBox + BouncyCastle pour générer une signature PKCS#7 détachée.
      *
      * @param masterPdfBytes bytes du PDF master
-     * @param signature signature information
-     * @return bytes du PDF master signé (avec l'incrément de signature)
+     * @param signature      informations de signature (type, clé, certificat)
+     * @param fields         champs à remplir avant de signer (peut être null ou vide)
+     * @return bytes du PDF mis à jour et signé (incrément PDF)
      */
-    public byte[] signPdf(byte[] masterPdfBytes, Signature signature) throws Exception {
+    public byte[] signPdf(byte[] masterPdfBytes, Signature signature, List<FieldDefinition> fields) throws Exception {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
+            if (!CollectionUtils.isEmpty(fields)) {
+                applyFieldValues(doc, fields);
+            }
+
             PDSignature pdSignature = new PDSignature();
             pdSignature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
             pdSignature.setSubFilter(PDSignature.SUBFILTER_ADBE_PKCS7_DETACHED);
@@ -307,7 +308,8 @@ public class PdfBoxService {
                 setFormFillPermission(pdSignature, certificationSignature.getPermissionLevel());
             }
 
-            if (signature instanceof ApprovalSignature approvalSignature) {
+            if (signature instanceof ApprovalSignature approvalSignature &&
+                    !CollectionUtils.isEmpty(approvalSignature.getFieldToLock())) {
                 lockFields(pdSignature, approvalSignature.getFieldToLock());
             }
 

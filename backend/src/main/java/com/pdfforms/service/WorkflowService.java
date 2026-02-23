@@ -118,7 +118,7 @@ public class WorkflowService {
                 .signerName("coc_platform")
                 .permissionLevel(SignaturePermissionLevel.FORM_FILL)
                 .build();
-        masterPdf = pdfBoxService.signPdf(masterPdf, certificationSignature);
+        masterPdf = pdfBoxService.signPdf(masterPdf, certificationSignature, null);
 
         // 3. Générer le PDF aplati initial (champs vides rendus visuellement)
         byte[] flattenedPdf = pdfBoxService.flattenPdf(masterPdf);
@@ -273,77 +273,12 @@ public class WorkflowService {
     }
 
     /**
-     * Applique les valeurs de champs dans le master PDF.
-     * Vérifie que chaque champ appartient au signataire via /Assign.
-     */
-    public List<FieldDefinition> fillFields(String workflowId, FillRequest request) throws Exception {
-        String signerId = slugify(request.getSignerName());
-        log.info("Remplissage des champs par signerId='{}' pour workflowId={}.", signerId, workflowId);
-
-        WorkflowDocument document = documentRepository.findByWorkflowId(workflowId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Document introuvable pour workflowId=" + workflowId));
-
-
-        List<FieldDefinition> updatedFields = document.getFields().stream()
-                .filter(field -> signerId.equals(field.getAssignedTo()))
-                .filter(field -> request.getFields().containsKey(field.getFieldName()))
-                .toList();
-
-        log.info("Update {} fields for {} in request", updatedFields.size(), request.getFields().size());
-
-        updatedFields.forEach(field -> field.setCurrentValue(request.getFields().get(field.getFieldName())));
-
-        // Mettre à jour le PDF master
-        byte[] updatedMaster = pdfBoxService.applyFieldValues(
-                document.getMasterPdf(), updatedFields);
-
-        document.setMasterPdf(updatedMaster);
-        document.setFlattenedStale(true);
-        documentRepository.save(document);
-
-        // Mettre à jour le statut du signataire en FILLED
-        Workflow workflow = workflowRepository.findById(workflowId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Workflow introuvable : " + workflowId));
-
-        workflow.setUpdatedAt(LocalDateTime.now());
-        workflowRepository.save(workflow);
-
-        log.info("Champs remplis par '{}' : {}", signerId, request.getFields().keySet());
-        return updatedFields;
-    }
-
-    /**
-     * Remplit les champs puis signe le document en une seule opération atomique.
-     * Appelle fillFields puis signDocument séquentiellement.
+     * Remplit les champs du signataire et signe le PDF master en une seule passe saveIncremental.
+     * Charge Workflow et WorkflowDocument une seule fois, effectue une seule sauvegarde de chacun.
      */
     public Map<String, Object> fillAndSign(String workflowId, FillAndSignRequest request) throws Exception {
-        List<FieldDefinition> updateFields = List.of();
-
-        // Étape 1 — remplir les champs (si la map n'est pas vide)
-        if (request.getFields() != null && !request.getFields().isEmpty()) {
-            FillRequest fillRequest = new FillRequest();
-            fillRequest.setSignerName(request.getSignerName());
-            fillRequest.setFields(request.getFields());
-            updateFields = fillFields(workflowId, fillRequest);
-        }
-
-        // Étape 2 — signer
-        SignRequest signRequest = new SignRequest();
-        signRequest.setSignerName(request.getSignerName());
-        return signDocument(workflowId, signRequest, updateFields);
-    }
-
-    /**
-     * Signe le PDF master de manière incrémentale.
-     * Fait avancer currentSignerOrder.
-     * Si c'était le dernier signataire, passe le workflow en COMPLETED.
-     */
-    public Map<String, Object> signDocument(String workflowId, SignRequest request,
-                                            List<FieldDefinition> updatedFields) throws Exception {
         String signerId = slugify(request.getSignerName());
-        log.info("Signature par signerId='{}' pour workflowId={}.", signerId, workflowId);
+        log.info("fillAndSign: signerId='{}', workflowId='{}'.", signerId, workflowId);
 
         Workflow workflow = workflowRepository.findById(workflowId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -369,6 +304,16 @@ public class WorkflowService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Document introuvable."));
 
+        Map<String, String> fieldValues = request.getFields() != null ? request.getFields() : Map.of();
+
+        List<FieldDefinition> updatedFields = document.getFields().stream()
+                .filter(field -> signerId.equals(field.getAssignedTo()))
+                .filter(field -> fieldValues.containsKey(field.getFieldName()))
+                .toList();
+
+        updatedFields.forEach(field -> field.setCurrentValue(fieldValues.get(field.getFieldName())));
+        log.info("Update {} fields for {} in request", updatedFields.size(), fieldValues.size());
+
         List<String> fieldsToLock = updatedFields.stream().map(FieldDefinition::getFieldName).toList();
         var approvalSignature = ApprovalSignature.builder()
                 .privateKey(signingKeyPair.getPrivate())
@@ -377,7 +322,7 @@ public class WorkflowService {
                 .fieldToLock(fieldsToLock)
                 .build();
 
-        byte[] signedPdf = pdfBoxService.signPdf(document.getMasterPdf(), approvalSignature);
+        byte[] signedPdf = pdfBoxService.signPdf(document.getMasterPdf(), approvalSignature, updatedFields);
 
         document.setMasterPdf(signedPdf);
         document.setFlattenedStale(true);
