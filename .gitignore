@@ -19,8 +19,8 @@ frontend/.vite/
 .DS_Store
 Thumbs.db
 
-# Claude memory (local only)
-.claude/
+# Claude — mémoire de session locale uniquement
+.claude/memory/
 
 # Logs
 *.log
