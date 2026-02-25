@@ -3,6 +3,7 @@ package com.pdfforms.service;
 import com.pdfforms.dto.AnalyzePdfResponse;
 import com.pdfforms.dto.DetectedFieldDto;
 import com.pdfforms.dto.FieldRequest;
+import com.pdfforms.dto.SignaturePlacement;
 import com.pdfforms.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -13,12 +14,15 @@ import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.SignatureOptions;
 import org.apache.pdfbox.pdmodel.interactive.form.*;
@@ -38,13 +42,17 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 @Slf4j
 @Service
 public class PdfBoxService {
+
+
 
     /**
      * Extrait les champs AcroForm d'un PDF existant.
@@ -289,9 +297,11 @@ public class PdfBoxService {
      * @param masterPdfBytes bytes du PDF master
      * @param signature      informations de signature (type, clé, certificat)
      * @param fields         champs à remplir avant de signer (peut être null ou vide)
+     * @param placement      position choisie par le signataire (null → position par défaut)
      * @return bytes du PDF mis à jour et signé (incrément PDF)
      */
-    public byte[] signPdf(byte[] masterPdfBytes, Signature signature, List<FieldDefinition> fields) throws Exception {
+    public byte[] signPdf(byte[] masterPdfBytes, Signature signature,
+                          List<FieldDefinition> fields, SignaturePlacement placement) throws Exception {
         try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(masterPdfBytes))) {
             if (!CollectionUtils.isEmpty(fields)) {
                 applyFieldValues(doc, fields);
@@ -329,11 +339,192 @@ public class PdfBoxService {
                 }
             }, options);
 
+            // L'apparence est appliquée APRÈS addSignature() pour travailler sur le champ
+            // réel que PDFBox vient de créer/remplir. Entre addSignature() et saveIncremental()
+            // les modifications sont incluses dans la même révision et couvertes par le byte range.
+            applySignatureAppearance(doc, pdSignature, signature.getSignerName(), placement);
+
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             doc.saveIncremental(bos);
             log.info("PDF signé avec saveIncremental ({} bytes).", bos.size());
             return bos.toByteArray();
         }
+    }
+
+    /**
+     * Retrouve le champ de signature que PDFBox vient de créer dans {@code addSignature()},
+     * le repositionne en bas à droite de la dernière page, et lui applique l'apparence visuelle.
+     * <p>
+     * Cette méthode doit être appelée <strong>après</strong> {@code doc.addSignature()} et
+     * <strong>avant</strong> {@code doc.saveIncremental()} : les modifications sont ainsi
+     * incluses dans la même révision PDF et couvertes par le byte range de la signature.
+     * <p>
+     * Stratégie de recherche : PDFBox définit {@code /V = pdSignature.getCOSObject()} sur le
+     * champ qu'il crée. On cherche ce champ par égalité de référence Java sur le COSObject.
+     *
+     * @param doc         document courant
+     * @param pdSignature objet PDSignature dont on cherche le champ associé
+     * @param signerName  nom du signataire à afficher dans l'apparence
+     */
+    private void applySignatureAppearance(PDDocument doc, PDSignature pdSignature,
+                                          String signerName, SignaturePlacement placement) throws IOException {
+        PDAcroForm acroForm = doc.getDocumentCatalog().getAcroForm();
+        if (acroForm == null) {
+            log.warn("AcroForm absent après addSignature() — apparence de signature ignorée.");
+            return;
+        }
+
+        // Trouver le champ dont /V pointe vers notre PDSignature (référence Java identique)
+        PDSignatureField sigField = null;
+        for (PDField field : acroForm.getFieldTree()) {
+            if (field instanceof PDSignatureField sf
+                    && pdSignature.getCOSObject() == sf.getCOSObject().getDictionaryObject(COSName.V)) {
+                sigField = sf;
+                break;
+            }
+        }
+        if (sigField == null) {
+            log.warn("Champ de signature introuvable après addSignature() — apparence ignorée.");
+            return;
+        }
+
+        // Pas de placement → signature de certification platform (pas d'apparence visuelle)
+        if (placement == null) {
+            log.debug("Pas de placement fourni — apparence ignorée (signature platform).");
+            return;
+        }
+
+        int pageIndex = Math.max(0, Math.min(placement.getPage(), doc.getNumberOfPages() - 1));
+        PDPage targetPage = doc.getPage(pageIndex);
+        float sigX = (float) placement.getX();
+        float sigY = (float) placement.getY();
+        float sigW = (float) placement.getWidth();
+        float sigH = (float) placement.getHeight();
+
+        PDAnnotationWidget widget = sigField.getWidgets().get(0);
+
+        // PDFBox crée le champ avec un rectangle invisible (0,0,0,0) sur une page.
+        // On le retire de sa page courante (si présente) avant de le replacer sur la cible.
+        PDPage currentPage = widget.getPage();
+        if (currentPage != null && currentPage != targetPage) {
+            List<PDAnnotation> annots = new ArrayList<>(currentPage.getAnnotations());
+            annots.removeIf(a -> a.getCOSObject() == widget.getCOSObject());
+            currentPage.setAnnotations(annots);
+        }
+
+        widget.getCOSObject().setItem(COSName.SUBTYPE, COSName.getPDFName("Widget"));
+        widget.setRectangle(new PDRectangle(sigX, sigY, sigW, sigH));
+        widget.setPage(targetPage);
+        widget.setPrinted(true);
+
+        // Ajouter à la page cible si pas encore présent
+        List<PDAnnotation> targetAnnots = new ArrayList<>(targetPage.getAnnotations());
+        boolean alreadyInPage = targetAnnots.stream()
+                .anyMatch(a -> a.getCOSObject() == widget.getCOSObject());
+        if (!alreadyInPage) {
+            targetAnnots.add(widget);
+            targetPage.setAnnotations(targetAnnots);
+        }
+
+        buildSignatureAppearance(doc, widget, signerName, sigW, sigH);
+        log.debug("Apparence appliquée pour '{}' à ({}, {}) {}x{} (page {})",
+                signerName, sigX, sigY, sigW, sigH,
+                placement != null ? placement.getPage() : doc.getNumberOfPages() - 1);
+    }
+
+    /**
+     * Construit l'apparence visuelle d'un champ de signature via l'API PDFBox.
+     * <p>
+     * Le dessin est effectué avec {@link PDPageContentStream} sur un document temporaire,
+     * ce qui délègue à PDFBox l'encodage des polices et des caractères (accents inclus).
+     * Les bytes du content stream résultant sont ensuite copiés dans le
+     * {@link PDAppearanceStream} du document principal.
+     * <p>
+     * Le même objet {@link PDResources} est partagé entre la page temporaire et
+     * l'appearance stream : PDFBox affecte les noms de ressources polices (/F0, /F1…)
+     * lors des appels {@code setFont()}, et ces mêmes noms sont utilisés dans les bytes
+     * copiés, garantissant la cohérence.
+     *
+     * @param doc        document principal (destination de l'appearance stream)
+     * @param widget     widget de l'annotation de signature
+     * @param signerName nom du signataire
+     * @param width      largeur du rectangle en points PDF
+     * @param height     hauteur du rectangle en points PDF
+     */
+    private void buildSignatureAppearance(PDDocument doc, PDAnnotationWidget widget,
+                                          String signerName, float width, float height) throws IOException {
+        PDType1Font fontBold    = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+        PDType1Font fontRegular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+        String dateStr = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(new Date());
+
+        // PDResources partagé : PDFBox y enregistre les polices au fil des setFont(),
+        // puis l'appearance stream référence les mêmes clés.
+        PDResources resources = new PDResources();
+        byte[] contentBytes;
+
+        try (PDDocument tempDoc = new PDDocument()) {
+            PDPage tempPage = new PDPage(new PDRectangle(width, height));
+            tempPage.setResources(resources);
+            tempDoc.addPage(tempPage);
+
+            try (PDPageContentStream cs = new PDPageContentStream(tempDoc, tempPage)) {
+                // Fond bleu clair
+                cs.setNonStrokingColor(0.93f, 0.95f, 0.98f);
+                cs.addRect(0, 0, width, height);
+                cs.fill();
+
+                // Barre d'accent gauche (bleu)
+                cs.setNonStrokingColor(0.25f, 0.41f, 0.68f);
+                cs.addRect(0, 0, 4, height);
+                cs.fill();
+
+                // Contour bleu
+                cs.setStrokingColor(0.25f, 0.41f, 0.68f);
+                cs.setLineWidth(0.8f);
+                cs.addRect(0.4f, 0.4f, width - 0.8f, height - 0.8f);
+                cs.stroke();
+
+                // Label "Signé par" en gris
+                cs.setNonStrokingColor(0.50f, 0.50f, 0.50f);
+                cs.beginText();
+                cs.setFont(fontRegular, 7);
+                cs.newLineAtOffset(8, height - 14f);
+                cs.showText("Signé par");
+                cs.endText();
+
+                // Nom du signataire en bleu gras
+                cs.setNonStrokingColor(0.15f, 0.25f, 0.50f);
+                cs.beginText();
+                cs.setFont(fontBold, 10);
+                cs.newLineAtOffset(8, height - 27f);
+                cs.showText(signerName);
+                cs.endText();
+
+                // Date en gris
+                cs.setNonStrokingColor(0.50f, 0.50f, 0.50f);
+                cs.beginText();
+                cs.setFont(fontRegular, 7);
+                cs.newLineAtOffset(8, 7);
+                cs.showText(dateStr);
+                cs.endText();
+            }
+
+            try (InputStream is = tempPage.getContents()) {
+                contentBytes = is.readAllBytes();
+            }
+        }
+
+        PDAppearanceStream ap = new PDAppearanceStream(doc);
+        ap.setResources(resources);
+        ap.setBBox(new PDRectangle(width, height));
+
+        try (OutputStream os = ap.getCOSObject().createOutputStream(COSName.FLATE_DECODE)) {
+            os.write(contentBytes);
+        }
+
+        PDAppearanceDictionary appearanceDict = new PDAppearanceDictionary();
+        appearanceDict.setNormalAppearance(ap);
+        widget.setAppearance(appearanceDict);
     }
 
     private void setFormFillPermission(PDSignature signature, SignaturePermissionLevel permissionLevel) {

@@ -6,6 +6,9 @@ import SignaturePanel from '../components/SignaturePanel'
 import { getSignerDocument, fillAndSign, downloadFinalPdf } from '../api/workflowApi'
 import { AlertTriangle, Loader2, FileSignature, CheckCircle, Download } from 'lucide-react'
 
+const SIG_W_PDF = 180
+const SIG_H_PDF = 50
+
 export default function SignerPage() {
   const { workflowId, signerId } = useParams()
 
@@ -15,6 +18,8 @@ export default function SignerPage() {
   const [pdfData, setPdfData] = useState(null)
   const [fieldValues, setFieldValues] = useState({})
   const [signed, setSigned] = useState(false)
+  const [placement, setPlacement] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -56,6 +61,29 @@ export default function SignerPage() {
     })
   }, [docData])
 
+  useEffect(() => {
+    const onDragEnd = () => setIsDragging(false)
+    window.addEventListener('dragend', onDragEnd)
+    return () => window.removeEventListener('dragend', onDragEnd)
+  }, [])
+
+  const handleSignatureDrop = useCallback((pageIndex, cssX, cssY, pageInfo) => {
+    const { scale, pageHeightPt, canvasWidth, canvasHeight } = pageInfo
+    const wCss = SIG_W_PDF * scale
+    const hCss = SIG_H_PDF * scale
+    const left = Math.max(0, Math.min(cssX - wCss / 2, canvasWidth - wCss))
+    const top  = Math.max(0, Math.min(cssY - hCss / 2, canvasHeight - hCss))
+    setPlacement({
+      page: pageIndex,
+      x: left / scale,
+      y: pageHeightPt - (top + hCss) / scale,
+      width: SIG_W_PDF,
+      height: SIG_H_PDF,
+    })
+  }, [])
+
+  const handleDragStart = useCallback(() => setIsDragging(true), [])
+
   const handleFieldChange = useCallback((fieldName, value) => {
     setFieldValues((prev) => {
       const next = { ...prev, [fieldName]: value }
@@ -73,10 +101,10 @@ export default function SignerPage() {
   }, [docData])
 
   const handleFillAndSign = useCallback(async () => {
-    if (!docData) return
-    await fillAndSign(docData.workflowId, docData.signerName, fieldValues)
+    if (!docData || !placement) return
+    await fillAndSign(docData.workflowId, docData.signerName, fieldValues, placement)
     setSigned(true)
-  }, [docData, fieldValues])
+  }, [docData, fieldValues, placement])
 
   // Chargement
   if (status === 'loading') {
@@ -202,16 +230,60 @@ export default function SignerPage() {
               <PDFCanvas
                 pdfData={pdfData}
                 renderOverlay={(pageIndex, pageInfo) => {
+                  const { scale, pageHeightPt, canvasWidth, canvasHeight } = pageInfo
                   const pageFields = fields.filter((f) => f.page === pageIndex)
-                  if (pageFields.length === 0) return null
+                  const isPlacedOnPage = placement?.page === pageIndex
+                  if (pageFields.length === 0 && !isDragging && !isPlacedOnPage) return null
+
+                  const wCss = SIG_W_PDF * scale
+                  const hCss = SIG_H_PDF * scale
                   return (
-                    <FieldOverlay
-                      fields={pageFields}
-                      scale={pageInfo.scale}
-                      pageHeightPt={pageInfo.pageHeightPt}
-                      values={fieldValues}
-                      onChange={handleFieldChange}
-                    />
+                    <>
+                      {pageFields.length > 0 && (
+                        <FieldOverlay
+                          fields={pageFields}
+                          scale={scale}
+                          pageHeightPt={pageHeightPt}
+                          values={fieldValues}
+                          onChange={handleFieldChange}
+                        />
+                      )}
+                      {isDragging && (
+                        <div
+                          className="absolute inset-0 z-30"
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            handleSignatureDrop(pageIndex, e.clientX - rect.left, e.clientY - rect.top, pageInfo)
+                          }}
+                        />
+                      )}
+                      {isPlacedOnPage && !isDragging && (
+                        <div
+                          draggable
+                          onDragStart={() => { setPlacement(null); setIsDragging(true) }}
+                          className="absolute z-20 border-2 border-blue-500 bg-blue-50/90 rounded cursor-grab select-none flex items-center justify-between px-2 shadow-sm"
+                          style={{
+                            left: placement.x * scale,
+                            top: (pageHeightPt - placement.y - placement.height) * scale,
+                            width: wCss,
+                            height: hCss,
+                          }}
+                        >
+                          <span className="text-xs font-semibold text-blue-700 truncate flex-1">
+                            {docData?.signerName ?? signerId}
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setPlacement(null) }}
+                            className="ml-1 shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-blue-400 hover:text-white hover:bg-blue-500 text-xs transition-colors"
+                            aria-label="Supprimer la signature"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )
                 }}
               />
@@ -233,6 +305,9 @@ export default function SignerPage() {
             workflowName={docData?.workflowName}
             signers={docData?.signers}
             onFillAndSign={handleFillAndSign}
+            placement={placement}
+            onDragStart={handleDragStart}
+            onDragEnd={() => setIsDragging(false)}
           />
         </div>
       </div>

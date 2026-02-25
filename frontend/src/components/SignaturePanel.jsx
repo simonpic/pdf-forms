@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from './ui/button'
 import { Card, CardContent } from './ui/card'
@@ -43,7 +43,8 @@ const TYPE_ICON = {
   radio:    { Icon: CircleDot,   color: 'text-amber-400' },
 }
 
-export default function SignaturePanel({ fields, values, signerName, workflowName, signers, onFillAndSign }) {
+export default function SignaturePanel({ fields, values, signerName, workflowName, signers, onFillAndSign, placement, onDragStart, onDragEnd }) {
+  const sigCanvas = useRef(null)
   const [error, setError]     = useState(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen]       = useState(false)
@@ -69,6 +70,27 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
       {/* Zone scrollable — contexte + card des champs */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <SignerSequence signers={signers} />
+
+        {/* Draggable signature preview */}
+        <div className="space-y-1">
+          <p className="text-xs text-slate-500 font-medium">Votre signature :</p>
+          <div
+            draggable
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            className="w-full h-12 border-2 border-blue-400 bg-blue-50 rounded flex items-center px-3 cursor-grab active:cursor-grabbing select-none"
+          >
+            {/* <PenLine size={14} className="text-blue-500 mr-2 shrink-0" /> */}
+            <canvas ref={sigCanvas}></canvas>
+            <span className="text-sm font-semibold text-blue-700 truncate">{signerName}</span>
+          </div>
+          <p className="text-xs text-center text-slate-400">
+            {placement
+              ? <span className="text-emerald-600 font-medium">Signature placée ✓</span>
+              : 'Faites glisser sur le document'}
+          </p>
+        </div>
+
         {hasFields && (
           <Card>
             <CardContent className="space-y-2 pt-4 pb-3">
@@ -104,7 +126,7 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
         )}
         <Button
           className="w-full bg-indigo-500 hover:bg-indigo-600"
-          disabled={loading}
+          disabled={loading || !placement}
           onClick={() => setOpen(true)}
         >
           <PenLine size={16} />

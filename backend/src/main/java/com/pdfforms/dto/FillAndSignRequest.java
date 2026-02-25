@@ -9,4 +9,6 @@ import java.util.Map;
 public class FillAndSignRequest {
     private String signerName;
     private Map<String, String> fields = new HashMap<>();  // fieldName -> value
+    /** Optionnel : position choisie par le signataire. Null → position par défaut. */
+    private SignaturePlacement signaturePlacement;
 }

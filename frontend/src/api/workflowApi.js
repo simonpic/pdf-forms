@@ -74,11 +74,11 @@ export async function getSignerDocument(workflowId, signerId) {
  * @param {string} signerName
  * @param {Object} fields - { fieldName: value } (peut être vide)
  */
-export async function fillAndSign(workflowId, signerName, fields) {
+export async function fillAndSign(workflowId, signerName, fields, signaturePlacement) {
   const res = await fetch(`${API_BASE}/workflows/${workflowId}/fill-and-sign`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ signerName, fields }),
+    body: JSON.stringify({ signerName, fields, signaturePlacement }),
   });
 
   if (!res.ok) {

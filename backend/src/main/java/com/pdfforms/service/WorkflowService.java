@@ -118,7 +118,7 @@ public class WorkflowService {
                 .signerName("coc_platform")
                 .permissionLevel(SignaturePermissionLevel.FORM_FILL)
                 .build();
-        masterPdf = pdfBoxService.signPdf(masterPdf, certificationSignature, null);
+        masterPdf = pdfBoxService.signPdf(masterPdf, certificationSignature, null, null);
 
         // 3. Générer le PDF aplati initial (champs vides rendus visuellement)
         byte[] flattenedPdf = pdfBoxService.flattenPdf(masterPdf);
@@ -318,11 +318,18 @@ public class WorkflowService {
         var approvalSignature = ApprovalSignature.builder()
                 .privateKey(signingKeyPair.getPrivate())
                 .certificate(signingCertificate)
-                .signerName("coc_platform")
+                .signerName(signerId)
                 .fieldToLock(fieldsToLock)
                 .build();
 
-        byte[] signedPdf = pdfBoxService.signPdf(document.getMasterPdf(), approvalSignature, updatedFields);
+        if (request.getSignaturePlacement() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La position de la signature est obligatoire.");
+        }
+
+        byte[] signedPdf = pdfBoxService.signPdf(
+                document.getMasterPdf(), approvalSignature, updatedFields,
+                request.getSignaturePlacement());
 
         document.setMasterPdf(signedPdf);
         document.setFlattenedStale(true);
