@@ -126,13 +126,3 @@ Consolider tous les documents produits en une documentation technique propre et 
 
 ---
 
-## Combos d'agents
-
-### Combo Fullstack — Frontend + Backend
-
-Utiliser ce combo pour implémenter une fonctionnalité des deux côtés simultanément, en s'assurant que le contrat d'API est la source de vérité unique.
-
-**Activation :**
-```
-Use Fullstack Combo
-```
