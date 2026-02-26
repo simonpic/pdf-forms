@@ -1,4 +1,6 @@
-# Apparence de signature PDF — Guide technique
+# Validité Signature PDF — Guide technique
+
+---
 
 ## 1. Structure d'une signature dans le PDF
 
@@ -42,7 +44,29 @@ Le blob `/Contents` est **exclu du calcul** — il est le résultat, pas l'entr�
 
 ---
 
-## 3. Sauvegardes incrémentielles — pourquoi l'apparence n'invalide pas
+## 3. ByteRange vs Permissions : deux garanties orthogonales
+
+**Le ByteRange** répond à : *"Le contenu a-t-il été modifié depuis la signature ?"*
+**Les permissions DocMDP** répondent à : *"Ce type de modification est-il autorisé ?"*
+
+Un viewer PDF (Acrobat, Foxit…) fait les **deux vérifications séparément** :
+
+```
+Vérification d'une signature
+        │
+        ├─ 1. Intégrité cryptographique
+        │      Hash(Part A + Part B) == hash dans /Contents ?
+        │      → OUI : la signature est techniquement VALIDE
+        │
+        └─ 2. Conformité aux permissions (seulement pour DocMDP)
+               Les révisions postérieures respectent-elles P=1/2/3 ?
+               → NON : la signature est marquée INVALIDE malgré le hash correct
+```
+
+Un save incrémental ne casse jamais le hash — mais il peut **violer les permissions**, ce qui fait passer la signature de "valide" à "invalide" dans le viewer.
+
+
+## 4. Sauvegardes incrémentielles — pourquoi l'apparence n'invalide pas
 
 PDF supporte les **révisions incrémentielles** : on n'écrase jamais un octet existant, on **ajoute** à la fin du fichier.
 
@@ -75,7 +99,8 @@ L'apparence (`/AP`) est traitée par Adobe Acrobat comme une **annotation** mise
 
 ---
 
-## 4. Comment PDFBox construit l'apparence dans ce projet
+
+## 5. Comment PDFBox construit l'apparence dans ce projet
 
 Le flux d'exécution lors d'un `fillAndSign` :
 
