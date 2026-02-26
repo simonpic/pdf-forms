@@ -1,10 +1,40 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import PDFCanvas from '../components/PDFCanvas'
 import FieldOverlay from '../components/FieldOverlay'
 import SignaturePanel from '../components/SignaturePanel'
 import { getSignerDocument, fillAndSign, downloadFinalPdf } from '../api/workflowApi'
 import { AlertTriangle, Loader2, FileSignature, CheckCircle, Download } from 'lucide-react'
+import { drawSignaturePreview, formatSignatureDate } from '../lib/signaturePreview'
+
+function PlacedSignatureChip({ signerName, style, onDragStart, onRemove }) {
+  const canvasRef = useRef(null)
+  const dateStr   = formatSignatureDate()
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      drawSignaturePreview(canvasRef.current, signerName, dateStr)
+    }
+  }, [signerName, dateStr])
+
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      className="absolute z-20 cursor-grab select-none"
+      style={style}
+    >
+      <canvas ref={canvasRef} className="w-full h-full rounded" />
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove() }}
+        className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center bg-white/80 text-blue-400 hover:text-white hover:bg-blue-500 text-xs transition-colors leading-none"
+        aria-label="Supprimer la signature"
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
 
 const SIG_W_PDF = 180
 const SIG_H_PDF = 50
@@ -47,7 +77,6 @@ export default function SignerPage() {
     return () => { cancelled = true }
   }, [workflowId, signerId])
 
-  // Initialise les valeurs par défaut pour checkbox/radio dès que docData est disponible
   useEffect(() => {
     if (!docData?.fields) return
     setFieldValues((prev) => {
@@ -87,15 +116,12 @@ export default function SignerPage() {
   const handleFieldChange = useCallback((fieldName, value) => {
     setFieldValues((prev) => {
       const next = { ...prev, [fieldName]: value }
-
-      // Exclusion mutuelle : désélectionner les autres radios du même groupe
       const field = docData?.fields?.find((f) => f.fieldName === fieldName)
       if (field?.fieldType === 'radio' && value === 'true') {
         docData.fields
           .filter((f) => f.fieldType === 'radio' && f.groupName === field.groupName && f.fieldName !== fieldName)
           .forEach((f) => { next[f.fieldName] = 'false' })
       }
-
       return next
     })
   }, [docData])
@@ -106,7 +132,6 @@ export default function SignerPage() {
     setSigned(true)
   }, [docData, fieldValues, placement])
 
-  // Chargement
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -120,7 +145,6 @@ export default function SignerPage() {
     )
   }
 
-  // Erreur
   if (status === 'error') {
     const isForbidden =
       errorMessage.includes('votre tour') ||
@@ -152,10 +176,8 @@ export default function SignerPage() {
     )
   }
 
-  // Document prêt
   const fields = docData?.fields ?? []
 
-  // Écran de succès post-signature
   if (signed) {
     return (
       <div className="min-h-screen bg-slate-50">
@@ -204,7 +226,6 @@ export default function SignerPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-3">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
@@ -223,7 +244,6 @@ export default function SignerPage() {
       </header>
 
       <div className="flex gap-0 h-[calc(100vh-65px)]">
-        {/* Zone principale — PDF */}
         <div className="flex-1 overflow-auto bg-slate-100 flex items-start justify-center p-2">
           {pdfData ? (
             <div className="flex flex-col items-center gap-3">
@@ -259,29 +279,20 @@ export default function SignerPage() {
                           }}
                         />
                       )}
-                      {isPlacedOnPage && !isDragging && (
-                        <div
-                          draggable
-                          onDragStart={() => { setPlacement(null); setIsDragging(true) }}
-                          className="absolute z-20 border-2 border-blue-500 bg-blue-50/90 rounded cursor-grab select-none flex items-center justify-between px-2 shadow-sm"
+                      {isPlacedOnPage && (
+                        <PlacedSignatureChip
+                          signerName={docData?.signerName ?? signerId}
                           style={{
                             left: placement.x * scale,
                             top: (pageHeightPt - placement.y - placement.height) * scale,
                             width: wCss,
                             height: hCss,
+                            opacity: isDragging ? 0.35 : 1,
+                            pointerEvents: isDragging ? 'none' : 'auto',
                           }}
-                        >
-                          <span className="text-xs font-semibold text-blue-700 truncate flex-1">
-                            {docData?.signerName ?? signerId}
-                          </span>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setPlacement(null) }}
-                            className="ml-1 shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-blue-400 hover:text-white hover:bg-blue-500 text-xs transition-colors"
-                            aria-label="Supprimer la signature"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                          onDragStart={() => setIsDragging(true)}
+                          onRemove={() => setPlacement(null)}
+                        />
                       )}
                     </>
                   )
@@ -296,7 +307,6 @@ export default function SignerPage() {
           )}
         </div>
 
-        {/* Panneau droit — signature */}
         <div className="w-80 bg-white border-l border-slate-200 flex flex-col">
           <SignaturePanel
             fields={fields}

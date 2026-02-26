@@ -1,28 +1,25 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from './ui/button'
 import { Card, CardContent } from './ui/card'
 import { Badge } from './ui/badge'
 import { PenLine, AlertCircle, Type, SquareCheck, CircleDot, ShieldCheck } from 'lucide-react'
 import SignerSequence from './SignerSequence'
+import { drawSignaturePreview, formatSignatureDate } from '../lib/signaturePreview'
 
-// Calcule si un champ individuel est "rempli" selon son type
 function isFieldFilled(f, values) {
   const fieldType = f.fieldType ?? 'text'
-  if (fieldType === 'checkbox') return true  // tout état (coché/décoché) est valide
-  if (fieldType === 'radio') return false    // géré au niveau du groupe ci-dessous
+  if (fieldType === 'checkbox') return true
+  if (fieldType === 'radio') return false
   const val = values[f.fieldName] ?? f.currentValue ?? ''
   return val.trim().length > 0
 }
 
-// Construit la liste des "items" à afficher (déduplique les groupes radio)
 function buildDisplayItems(fields, values) {
   const seenGroups = new Set()
   const items = []
-
   for (const f of fields) {
     const fieldType = f.fieldType ?? 'text'
-
     if (fieldType === 'radio') {
       if (seenGroups.has(f.groupName)) continue
       seenGroups.add(f.groupName)
@@ -33,7 +30,6 @@ function buildDisplayItems(fields, values) {
       items.push({ key: f.fieldName, label: f.label || f.fieldName, fieldType, filled: isFieldFilled(f, values) })
     }
   }
-
   return items
 }
 
@@ -43,11 +39,20 @@ const TYPE_ICON = {
   radio:    { Icon: CircleDot,   color: 'text-amber-400' },
 }
 
+
 export default function SignaturePanel({ fields, values, signerName, workflowName, signers, onFillAndSign, placement, onDragStart, onDragEnd }) {
-  const sigCanvas = useRef(null)
+  const canvasRef = useRef(null)
   const [error, setError]     = useState(null)
   const [loading, setLoading] = useState(false)
   const [open, setOpen]       = useState(false)
+
+  const dateStr = formatSignatureDate()
+
+  useEffect(() => {
+    if (canvasRef.current && signerName) {
+      drawSignaturePreview(canvasRef.current, signerName, dateStr)
+    }
+  }, [signerName, dateStr])
 
   const displayItems = buildDisplayItems(fields, values)
   const hasFields    = displayItems.length > 0
@@ -67,22 +72,20 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
 
   return (
     <>
-      {/* Zone scrollable — contexte + card des champs */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <SignerSequence signers={signers} />
 
-        {/* Draggable signature preview */}
+        {/* Aperçu de signature — draggable */}
         <div className="space-y-1">
           <p className="text-xs text-slate-500 font-medium">Votre signature :</p>
           <div
             draggable
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
-            className="w-full h-12 border-2 border-blue-400 bg-blue-50 rounded flex items-center px-3 cursor-grab active:cursor-grabbing select-none"
+            className="w-full cursor-grab active:cursor-grabbing select-none rounded overflow-hidden"
+            style={{ height: '72px' }}
           >
-            {/* <PenLine size={14} className="text-blue-500 mr-2 shrink-0" /> */}
-            <canvas ref={sigCanvas}></canvas>
-            <span className="text-sm font-semibold text-blue-700 truncate">{signerName}</span>
+            <canvas ref={canvasRef} className="w-full h-full" />
           </div>
           <p className="text-xs text-center text-slate-400">
             {placement
@@ -116,7 +119,7 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
         )}
       </div>
 
-      {/* Footer fixe — bouton de signature */}
+      {/* Footer */}
       <div className="border-t border-slate-200 p-4 space-y-3">
         {error && (
           <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
@@ -139,7 +142,6 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-sm bg-white rounded-xl shadow-xl p-6 space-y-4 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
-
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
                 <ShieldCheck size={20} className="text-indigo-500" />
@@ -155,17 +157,11 @@ export default function SignaturePanel({ fields, values, signerName, workflowNam
                 </Dialog.Description>
               </div>
             </div>
-
             <div className="flex gap-2 pt-1">
               <Dialog.Close asChild>
-                <Button variant="outline" className="flex-1">
-                  Annuler
-                </Button>
+                <Button variant="outline" className="flex-1">Annuler</Button>
               </Dialog.Close>
-              <Button
-                className="flex-1 bg-indigo-500 hover:bg-indigo-600"
-                onClick={handleConfirm}
-              >
+              <Button className="flex-1 bg-indigo-500 hover:bg-indigo-600" onClick={handleConfirm}>
                 <PenLine size={15} />
                 Signer
               </Button>
