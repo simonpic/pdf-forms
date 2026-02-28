@@ -22,13 +22,7 @@ L'Approval Signature est la **signature d'approbation**. Elle exprime le consent
 | Position dans le document | Première signature | Après la certification |
 | Structure PDF | Référencée dans `/Perms/DocMDP` | Champ de signature ordinaire |
 
----
-
-## Contexte
-
-Lorsqu'un document PDF est **certifié** (via une *Certification Signature*), une valeur de permission `/P` est inscrite dans le dictionnaire `DocMDP`. Cette valeur détermine ce qui est autorisé ou interdit après la certification pour l'ensemble de la vie du document.
-
----
+--- 
 
 ## Les trois niveaux
 
@@ -53,63 +47,56 @@ Un lecteur PDF conforme (Adobe Acrobat, etc.) valide la signature de certificati
 
 ---
 
-## Scénario simple : Formulaire signé puis complété
+## FieldMDP — Verrouillage granulaire des champs
 
-### Contexte
+### Principe
 
-Un responsable RH prépare un formulaire de demande de congé en PDF.  
-Il contient deux champs AcroForm :
-- `date_depart` — à remplir par l'employé
-- `validation_rh` — à remplir par le RH
+Là où le DocMDP fixe une politique globale sur l'ensemble du document, le **FieldMDP** opère au niveau des champs AcroForm individuels. Il permet à une Approval Signature de déclarer explicitement **quels champs sont désormais verrouillés** à partir du moment où cette signature est apposée.
 
-L'objectif est que le RH **signe et certifie le document** pour en attester l'origine, tout en laissant l'employé **remplir son champ** par la suite.
+Le FieldMDP est porté par un dictionnaire `/SigFieldLock` attaché au champ de signature. Ce dictionnaire définit la liste des champs concernés et le sens du verrou via l'entrée `/Action` :
 
-### Étapes
+| Valeur `/Action` | Champs verrouillés après signature |
+|---|---|
+| `All` | Tous les champs du document |
+| `Include` | Uniquement les champs listés dans `/Fields` |
+| `Exclude` | Tous les champs **sauf** ceux listés dans `/Fields` |
+
+### Comment le validator PDF l'évalue
+
+Lors de la validation d'une Approval Signature porteuse d'un FieldMDP, le validator recalcule le hash couvrant les octets du document au moment de la signature, puis vérifie qu'aucun des champs désignés comme verrouillés n'a été modifié dans les révisions incrémentales ultérieures. Si un champ verrouillé a changé, la signature est marquée invalide.
+
+### FieldMDP vs DocMDP — différences clés
+
+| Critère | DocMDP | FieldMDP |
+|---|---|---|
+| Porté par | Certification Signature (unique) | Approval Signature (une par étape) |
+| Granularité | Document entier | Champs individuels |
+| Entrée PDF | `/Perms/DocMDP` dans le catalogue | `/SigFieldLock` sur le champ de signature |
+| Paramètre de permission | `/P` (1, 2 ou 3) | `/Action` + `/Fields` |
+| Objectif | Définir ce que les signataires suivants *peuvent* faire | Geler l'état des champs remplis *à cette étape* |
+| Cardinalité | 1 par document | 1 par Approval Signature |
+
+### Usage dans ce projet
+
+Chaque signataire appose une Approval Signature avec un FieldMDP configuré en `Exclude` sur ses propres champs : une fois signée, sa contribution est gelée et ne peut plus être altérée par les signataires suivants. Le DocMDP de niveau `P=2` posé à la création du workflow reste la garde-fou global, garantissant qu'aucune modification structurelle n'est possible quelle que soit l'étape.
 
 ```
-1. Le RH crée le PDF avec les deux champs AcroForm vides.
-
-2. Le RH appose une Certification Signature avec P=2.
-   → Le document est certifié. Sa structure est figée.
-   → Les champs AcroForm restent modifiables.
-
-3. L'employé ouvre le document et saisit la valeur du champ `date_depart`.
-   → Cette modification est autorisée par P=2.
-   → La signature de certification reste valide.
-
-4. Le RH remplit le champ `validation_rh` et appose une Approval Signature.
-   → Cette deuxième signature s'inscrit dans le cadre de la certification.
-   → Le document est désormais complet et doublement signé.
+Workflow :
+  ┌─────────────────────────────────────────────────────┐
+  │ Certification Signature (DocMDP P=2)                │  ← création du workflow
+  │   → autorise : remplissage champs + nouvelles sigs  │
+  └─────────────────────────────────────────────────────┘
+           ↓
+  ┌─────────────────────────────────────────────────────┐
+  │ Approval Signature Signataire 1 (FieldMDP Exclude)  │  ← étape 1
+  │   → gèle : tous les champs sauf ceux de S1          │
+  └─────────────────────────────────────────────────────┘
+           ↓
+  ┌─────────────────────────────────────────────────────┐
+  │ Approval Signature Signataire 2 (FieldMDP Exclude)  │  ← étape 2
+  │   → gèle : tous les champs sauf ceux de S2          │
+  └─────────────────────────────────────────────────────┘
 ```
-
-### Ce qui aurait invalider la signature
-
-Si l'employé avait tenté de modifier le texte du document, de supprimer une page ou d'ajouter une annotation, la signature de certification aurait été marquée **invalide** par le reader.
-
----
-
-## Implémentation avec PDFBox
-
-```java
-// Définir les permissions MDP lors de la Certification Signature
-COSDictionary transformParams = new COSDictionary();
-transformParams.setItem(COSName.TYPE, COSName.getPDFName("TransformParams"));
-transformParams.setInt(COSName.P, 2); // Niveau 2 : champs AcroForm modifiables
-transformParams.setName(COSName.V, "1.2");
-
-COSDictionary reference = new COSDictionary();
-reference.setItem(COSName.TYPE, COSName.getPDFName("SigRef"));
-reference.setItem(COSName.getPDFName("TransformMethod"), COSName.getPDFName("DocMDP"));
-reference.setItem(COSName.getPDFName("TransformParams"), transformParams);
-
-COSArray referenceArray = new COSArray();
-referenceArray.add(reference);
-
-// Attacher au dictionnaire de la signature
-signature.getCOSObject().setItem(COSName.getPDFName("Reference"), referenceArray);
-```
-
-> **Rappel :** La Certification Signature doit être la **première et unique** signature DocMDP du document. Elle est également référencée depuis `/Perms` dans le catalogue du document, ce que PDFBox gère automatiquement.
 
 ---
 

@@ -429,7 +429,7 @@ public class PdfBoxService {
         buildSignatureAppearance(doc, widget, signerName, sigW, sigH);
         log.debug("Apparence appliquée pour '{}' à ({}, {}) {}x{} (page {})",
                 signerName, sigX, sigY, sigW, sigH,
-                placement != null ? placement.getPage() : doc.getNumberOfPages() - 1);
+                placement.getPage());
     }
 
     /**
