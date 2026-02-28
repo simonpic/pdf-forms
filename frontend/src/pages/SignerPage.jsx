@@ -111,7 +111,10 @@ export default function SignerPage() {
     })
   }, [])
 
-  const handleDragStart = useCallback(() => setIsDragging(true), [])
+  const handleDragStart = useCallback((e) => {
+    e.dataTransfer.setData('text/plain', '')  // required on macOS Chrome for drag to be valid
+    setIsDragging(true)
+  }, [])
 
   const handleFieldChange = useCallback((fieldName, value) => {
     setFieldValues((prev) => {
@@ -290,7 +293,7 @@ export default function SignerPage() {
                             opacity: isDragging ? 0.35 : 1,
                             pointerEvents: isDragging ? 'none' : 'auto',
                           }}
-                          onDragStart={() => setIsDragging(true)}
+                          onDragStart={(e) => { e.dataTransfer.setData('text/plain', ''); setIsDragging(true) }}
                           onRemove={() => setPlacement(null)}
                         />
                       )}
